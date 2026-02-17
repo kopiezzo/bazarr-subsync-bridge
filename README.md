@@ -1,4 +1,4 @@
-# subsync-container
+# bazarr-subsync-bridge
 
 Queue-based subtitle synchronization container built around [sc0ty/subsync](https://github.com/sc0ty/subsync).
 
@@ -70,7 +70,7 @@ chmod +x /config/scripts/bazarr-postprocess.sh
 - [ ] The shared queue directory is mounted to `/queue` in `subsync`.
 - [ ] Media paths from Bazarr are valid inside `subsync` (same path mapping semantics).
 - [ ] A test subtitle download creates a `job-*.json` file and it disappears after processing.
-- [ ] `docker compose logs -f subsync` shows a successful run (`SubSync finished successfully`).
+- [ ] `docker compose logs -f subsync` shows a successful run (`OK SubSync completed successfully`).
 
 ## Queue job format
 
@@ -133,7 +133,7 @@ bash -n subsync-monitor.sh
 bash -n subsync-wrapper.sh
 bash -n bazarr-postprocess.sh
 docker compose config
-docker build -t subsync-container .
+docker build -t bazarr-subsync-bridge .
 ```
 
 ## Included docs

@@ -2,7 +2,7 @@ services:
   subsync:
     build:
       context: .
-    image: subsync-container:latest
+    image: bazarr-subsync-bridge:latest
     container_name: subsync
     restart: unless-stopped
     env_file:
