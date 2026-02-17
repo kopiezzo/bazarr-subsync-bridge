@@ -1,18 +1,18 @@
 #!/bin/bash
-# SubSync Wrapper Script dla Bazarr Custom Post-Processing
+# SubSync Wrapper Script for Bazarr Custom Post-Processing
 #
-# Ten skrypt jest wywoływany przez Bazarr po pobraniu napisów
-# i automatycznie synchronizuje je z video używając subsync
+# This script is called by Bazarr after subtitle download
+# and synchronizes subtitles with the video using subsync
 
 set -euo pipefail
 
-# Konfiguracja
+# Configuration
 SUBSYNC_LOG_LEVEL="${SUBSYNC_LOG_LEVEL:-1}"  # 0=error, 1=info, 2=debug, 3=verbose
-SUBSYNC_EFFORT="${SUBSYNC_EFFORT:-0.5}"       # 0.0-1.0, im wyższe tym dokładniejsze ale wolniejsze
-SUBSYNC_MAX_WINDOW="${SUBSYNC_MAX_WINDOW:-600}"  # Maksymalna korekta w sekundach (10 min)
-SUBSYNC_MIN_CORRELATION="${SUBSYNC_MIN_CORRELATION:-0.5}"  # Minimalna korelacja dla sukcesu
+SUBSYNC_EFFORT="${SUBSYNC_EFFORT:-0.5}"       # 0.0-1.0, higher is more accurate but slower
+SUBSYNC_MAX_WINDOW="${SUBSYNC_MAX_WINDOW:-600}"  # Maximum correction window in seconds (10 min)
+SUBSYNC_MIN_CORRELATION="${SUBSYNC_MIN_CORRELATION:-0.5}"  # Minimum correlation threshold for success
 
-# Funkcja logowania
+# Logging helpers
 log() {
     echo "[$(date +'%Y-%m-%d %H:%M:%S')] $*" >&2
 }
@@ -21,9 +21,9 @@ log_error() {
     echo "[$(date +'%Y-%m-%d %H:%M:%S')] ERROR: $*" >&2
 }
 
-# Sprawdzenie argumentów
+# Validate arguments
 if [ $# -lt 2 ]; then
-    log_error "Wymagane argumenty: VIDEO_FILE SUBTITLE_FILE [SUBTITLE_LANG] [VIDEO_LANG]"
+    log_error "Required arguments: VIDEO_FILE SUBTITLE_FILE [SUBTITLE_LANG] [VIDEO_LANG]"
     exit 1
 fi
 
@@ -32,47 +32,47 @@ SUBTITLE_FILE="$2"
 SUBTITLE_LANG="${3:-}"
 VIDEO_LANG="${4:-}"
 
-# Walidacja plików
+# Validate files
 if [ ! -f "$VIDEO_FILE" ]; then
-    log_error "Plik video nie istnieje: $VIDEO_FILE"
+    log_error "Video file does not exist: $VIDEO_FILE"
     exit 1
 fi
 
 if [ ! -f "$SUBTITLE_FILE" ]; then
-    log_error "Plik napisów nie istnieje: $SUBTITLE_FILE"
+    log_error "Subtitle file does not exist: $SUBTITLE_FILE"
     exit 1
 fi
 
-# Sprawdzenie rozmiaru pliku napisów (jeśli puste, nie ma co synchronizować)
+# Check subtitle file size (skip if empty)
 if [ ! -s "$SUBTITLE_FILE" ]; then
-    log_error "Plik napisów jest pusty: $SUBTITLE_FILE"
+    log_error "Subtitle file is empty: $SUBTITLE_FILE"
     exit 1
 fi
 
 log "========================================="
-log "SubSync - Automatyczna synchronizacja napisów"
+log "SubSync - Automatic subtitle synchronization"
 log "========================================="
 log "Video: $VIDEO_FILE"
-log "Napisy: $SUBTITLE_FILE"
-log "Język napisów: ${SUBTITLE_LANG:-auto}"
-log "Język video: ${VIDEO_LANG:-auto}"
+log "Subtitle: $SUBTITLE_FILE"
+log "Subtitle language: ${SUBTITLE_LANG:-auto}"
+log "Video language: ${VIDEO_LANG:-auto}"
 log "Effort: $SUBSYNC_EFFORT"
 log "Max window: ${SUBSYNC_MAX_WINDOW}s"
 log "========================================="
 
-# Backup oryginalnych napisów
+# Backup original subtitle file
 BACKUP_FILE="${SUBTITLE_FILE}.bak-$(date +%s)"
 cp "$SUBTITLE_FILE" "$BACKUP_FILE"
-log "Backup utworzony: $BACKUP_FILE"
+log "Backup created: $BACKUP_FILE"
 
-# Plik tymczasowy dla wyjścia (subsync nie pozwala nadpisać pliku wejściowego)
-# Używamy katalogu tymczasowego aby uniknąć problemów z pattern
+# Temporary output file (subsync cannot overwrite input file directly)
+# Use a temporary directory to avoid output pattern issues
 TEMP_DIR="/tmp/subsync_$$"
 mkdir -p "$TEMP_DIR"
 TEMP_OUTPUT="$TEMP_DIR/output.srt"
 rm -f "$TEMP_OUTPUT"
 
-# Budowanie komendy subsync
+# Build subsync command
 SUBSYNC_CMD=(
     subsync --cli sync
     --sub "$SUBTITLE_FILE"
@@ -84,46 +84,46 @@ SUBSYNC_CMD=(
     "--verbose=$SUBSYNC_LOG_LEVEL"
 )
 
-# Uwaga: Opcje --sub-lang i --ref-lang są NIEDOSTĘPNE w subsync 0.17.0 (bug)
-# Subsync automatycznie wykryje język z plików
+# Note: --sub-lang and --ref-lang are unavailable in subsync 0.17.0 (known issue)
+# Subsync auto-detects language from files
 
-# Wykonanie synchronizacji
-log "Uruchamianie subsync..."
-log "Komenda: ${SUBSYNC_CMD[*]}"
+# Execute synchronization
+log "Running subsync..."
+log "Command: ${SUBSYNC_CMD[*]}"
 
 if "${SUBSYNC_CMD[@]}"; then
-    log "✓ Synchronizacja zakończona sukcesem!"
+    log "OK Synchronization completed successfully"
 
-    # Kopiowanie pliku tymczasowego do właściwego miejsca
+    # Move temporary output to target subtitle path
     if [ -f "$TEMP_OUTPUT" ]; then
         mv "$TEMP_OUTPUT" "$SUBTITLE_FILE"
-        log "Napisy zostały zsynchronizowane: $SUBTITLE_FILE"
+        log "Subtitles synchronized: $SUBTITLE_FILE"
 
-        # Usunięcie backupu po sukcesie (opcjonalne)
+        # Remove backup after success (optional)
         if [ "${SUBSYNC_KEEP_BACKUP:-0}" = "0" ]; then
             rm -f "$BACKUP_FILE"
-            log "Backup usunięty (SUBSYNC_KEEP_BACKUP=0)"
+            log "Backup removed (SUBSYNC_KEEP_BACKUP=0)"
         else
-            log "Backup zachowany: $BACKUP_FILE"
+            log "Backup kept: $BACKUP_FILE"
         fi
 
         rm -rf "$TEMP_DIR"
 
         exit 0
     else
-        log_error "✗ Plik wyjściowy nie został utworzony: $TEMP_OUTPUT"
+        log_error "ERROR Output file was not created: $TEMP_OUTPUT"
         rm -rf "$TEMP_DIR"
         exit 1
     fi
 else
     EXIT_CODE=$?
-    log_error "✗ Synchronizacja nie powiodła się (kod: $EXIT_CODE)"
-    log_error "Przywracanie oryginalnych napisów z backupu..."
+    log_error "ERROR Synchronization failed (code: $EXIT_CODE)"
+    log_error "Restoring original subtitles from backup..."
 
-    # Przywrócenie backupu w przypadku błędu
+    # Restore backup on failure
     mv "$BACKUP_FILE" "$SUBTITLE_FILE"
     rm -rf "$TEMP_DIR"
-    log_error "Oryginalne napisy przywrócone"
+    log_error "Original subtitles restored"
 
     exit $EXIT_CODE
 fi

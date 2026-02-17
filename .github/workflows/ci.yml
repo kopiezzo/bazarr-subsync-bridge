@@ -17,4 +17,4 @@ jobs:
           bash -n subsync-wrapper.sh
 
       - name: Docker build
-        run: docker build -t subsync-container .
+        run: docker build -t bazarr-subsync-bridge .

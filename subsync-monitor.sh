@@ -1,5 +1,5 @@
 #!/bin/bash
-# SubSync Queue Monitor - kontenerowa wersja z integracją Plex
+# SubSync Queue Monitor - container version with Plex integration
 
 set -euo pipefail
 
@@ -27,7 +27,7 @@ refresh_plex() {
     local parent_dir=$(dirname "$video_path")
 
     if [ -z "$PLEX_URL" ] || [ -z "$PLEX_TOKEN" ]; then
-        log "⚠ Plex integration disabled (missing PLEX_URL or PLEX_TOKEN)"
+        log "WARN Plex integration disabled (missing PLEX_URL or PLEX_TOKEN)"
         return 0
     fi
 
@@ -39,7 +39,7 @@ refresh_plex() {
         section_id="$PLEX_SECTION_MOVIES"
     fi
 
-    log "Odświeżam Plex (section $section_id): $parent_dir"
+    log "Refreshing Plex (section $section_id): $parent_dir"
 
     # URL encode the path
     local encoded_path
@@ -48,9 +48,9 @@ refresh_plex() {
     if wget -q -O /dev/null \
         --header="X-Plex-Token: $PLEX_TOKEN" \
         "${PLEX_URL}/library/sections/${section_id}/refresh?path=${encoded_path}"; then
-        log "✓ Plex odświeżony"
+        log "OK Plex refresh completed"
     else
-        log "⚠ Błąd odświeżania Plex (sprawdź token i URL)"
+        log "WARN Plex refresh failed (check token and URL)"
     fi
 }
 
@@ -59,7 +59,7 @@ log "SubSync Queue Monitor v1.1"
 log "=========================================="
 log "Queue dir: $QUEUE_DIR"
 [ -n "$PLEX_URL" ] && log "Plex URL: $PLEX_URL" || log "Plex integration: disabled"
-log "Rozpoczynam monitorowanie..."
+log "Starting monitor loop..."
 
 mkdir -p "$QUEUE_DIR" 2>/dev/null || true
 
@@ -71,7 +71,7 @@ inotifywait -m -e create,moved_to --format '%f' "$QUEUE_DIR" 2>/dev/null | while
     QUEUE_FILE="$QUEUE_DIR/$filename"
     sleep 0.5
 
-    log "Przetwarzam: $filename"
+    log "Processing: $filename"
 
     VIDEO=$(jq -r '.video // empty' "$QUEUE_FILE" 2>/dev/null || echo "")
     SUBTITLE=$(jq -r '.subtitle // empty' "$QUEUE_FILE" 2>/dev/null || echo "")
@@ -79,30 +79,30 @@ inotifywait -m -e create,moved_to --format '%f' "$QUEUE_DIR" 2>/dev/null | while
     VID_LANG=$(jq -r '.video_lang // empty' "$QUEUE_FILE" 2>/dev/null || echo "")
 
     if [ -z "$VIDEO" ] || [ -z "$SUBTITLE" ]; then
-        log "ERROR: Nieprawidłowy format JSON: $filename"
+        log "ERROR: Invalid JSON format: $filename"
         rm -f "$QUEUE_FILE"
         continue
     fi
 
     log "Video: $(basename "$VIDEO")"
     log "Subtitle: $(basename "$SUBTITLE")"
-    log "Język: $SUB_LANG → $VID_LANG"
-    log "Wykonuję subsync..."
+    log "Language: $SUB_LANG -> $VID_LANG"
+    log "Running subsync..."
 
     if /scripts/subsync-wrapper.sh \
         "$VIDEO" \
         "$SUBTITLE" \
         "${SUB_LANG}" \
         "${VID_LANG}" >> "$LOG_DIR/subsync-exec.log" 2>&1; then
-        log "✓ SubSync zakończony sukcesem"
+        log "OK SubSync completed successfully"
         refresh_plex "$VIDEO"
     else
         EXIT_CODE=$?
-        log "✗ SubSync błąd (kod: $EXIT_CODE)"
+        log "ERROR SubSync failed (code: $EXIT_CODE)"
     fi
 
     rm -f "$QUEUE_FILE"
     log "=========================================="
 done
 
-log "Monitor zakończony"
+log "Monitor stopped"
