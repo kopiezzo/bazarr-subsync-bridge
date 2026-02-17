@@ -1,0 +1,10 @@
+
+# Local runtime artifacts
+logs/
+queue/
+*.log
+
+# Local environment files
+.env
+.env.*
+!.env.example
