@@ -16,7 +16,7 @@ Thanks for helping improve this project.
 Recommended checks:
 
 ```bash
-docker build -t subsync-container .
+docker build -t bazarr-subsync-bridge .
 bash -n subsync-monitor.sh
 bash -n subsync-wrapper.sh
 ```
