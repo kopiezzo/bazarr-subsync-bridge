@@ -1,0 +1,7 @@
+.git
+.github
+.codebase
+logs
+queue
+*.log
+.env

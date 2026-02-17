@@ -1,0 +1,17 @@
+services:
+  subsync:
+    build:
+      context: .
+    image: subsync-container:latest
+    container_name: subsync
+    restart: unless-stopped
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      QUEUE_DIR: ${QUEUE_DIR:-/queue}
+      LOG_DIR: ${LOG_DIR:-/logs}
+    volumes:
+      - ${QUEUE_HOST_PATH:-./queue}:/queue
+      - ${LOGS_HOST_PATH:-./logs}:/logs
+      - ${MEDIA_HOST_PATH:-./media}:${MEDIA_CONTAINER_PATH:-/media}
