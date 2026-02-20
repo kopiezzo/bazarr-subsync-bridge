@@ -23,12 +23,20 @@ bash -n subsync-wrapper.sh
 
 ## Pull request guidelines
 
-- Explain why the change is needed.
-- Describe how to verify it.
-- Mention risk/watchouts when touching runtime behavior.
+- Use required sections:
+  - `## Summary`
+  - `## Verification`
+- Add when relevant:
+  - `## Risk and rollback`
+  - `## Notes`
 
 ## Commit style
 
-Use clear, imperative messages, for example:
-- `add plex refresh timeout handling`
-- `fix queue file validation for empty payloads`
+Use this format:
+
+- `type/scope: action object`
+
+Examples:
+
+- `fix/automation: handle plex refresh timeout`
+- `feat/queue: add payload validation for empty job files`

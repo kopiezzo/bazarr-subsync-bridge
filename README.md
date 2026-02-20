@@ -1,14 +1,24 @@
-# bazarr-subsync-bridge
+# Bazarr SubSync Bridge
 
-Queue-based subtitle synchronization container built around [sc0ty/subsync](https://github.com/sc0ty/subsync).
+Queue-based subtitle synchronization service for Bazarr workflows, powered by [sc0ty/subsync](https://github.com/sc0ty/subsync).
 
-## What this does
+## Features
 
-- Watches a queue directory for JSON jobs.
-- Runs `subsync` for each video/subtitle pair.
-- Optionally refreshes Plex library after successful sync.
+- Watches a queue directory for JSON jobs produced by Bazarr post-processing.
+- Runs `subsync` for each `video` and `subtitle` pair.
+- Validates required job fields before processing.
+- Optionally refreshes Plex sections after successful synchronization.
+- Keeps logs and execution artifacts for operational diagnostics.
 
-## Quick start (recommended)
+## Architecture
+
+- `bazarr-postprocess.sh` - Bazarr hook that writes queue jobs.
+- `subsync-monitor.sh` - queue watcher and job dispatcher.
+- `subsync-wrapper.sh` - `subsync` execution and result handling.
+- `docker-compose.yml` - service runtime mounts and environment.
+- `Dockerfile` - container image with runtime dependencies.
+
+## Quickstart
 
 1. Clone this repository.
 2. Copy environment template:
@@ -33,7 +43,7 @@ docker compose ps
 docker compose logs -f subsync
 ```
 
-## Bazarr integration
+## Bazarr Integration
 
 Use this command in Bazarr custom post-processing:
 
@@ -41,9 +51,9 @@ Use this command in Bazarr custom post-processing:
 /config/scripts/bazarr-postprocess.sh {{episode}} {{subtitles}} {{subtitles_language_code3}} {{episode_language_code3}}
 ```
 
-### How to create `bazarr-postprocess.sh` after cloning
+### How to install `bazarr-postprocess.sh`
 
-The script is already included in this repository as `bazarr-postprocess.sh`.
+The script is included in this repository as `bazarr-postprocess.sh`.
 
 For a Bazarr container/user:
 
@@ -72,7 +82,7 @@ chmod +x /config/scripts/bazarr-postprocess.sh
 - [ ] A test subtitle download creates a `job-*.json` file and it disappears after processing.
 - [ ] `docker compose logs -f subsync` shows a successful run (`OK SubSync completed successfully`).
 
-## Queue job format
+## Queue Job Format
 
 Each job is a JSON file in `/queue` with at least:
 
@@ -92,41 +102,49 @@ Required keys: `video`, `subtitle`.
 See `.env.example` for all variables.
 
 Common knobs:
+
 - `SUBSYNC_EFFORT`
 - `SUBSYNC_MAX_WINDOW`
 - `SUBSYNC_MIN_CORRELATION`
 - `SUBSYNC_LOG_LEVEL`
 
 Optional integrations:
+
 - Plex: `PLEX_URL`, `PLEX_TOKEN`, `PLEX_SECTION_SHOWS`, `PLEX_SECTION_MOVIES`
 
 ## Troubleshooting
 
 ### Job processed but sync failed
+
 - Check logs:
   - `docker compose logs -f subsync`
   - inspect `/logs/subsync-exec.log` inside mounted logs directory
 
 ### "File not found" in wrapper
+
 - Your media mapping is inconsistent.
 - Verify that path from Bazarr exists inside `subsync` container.
 
 ### No jobs are being picked up
+
 - Check queue mount:
   - host queue path from `.env` must be mounted to `/queue`
 - Confirm queue files end with `.json`.
 
 ### Plex refresh not triggered
+
 - Missing or invalid `PLEX_URL` or `PLEX_TOKEN`.
 - Sync itself still succeeds; Plex refresh is non-blocking.
 
-## Security notes
+## Security Notes
 
 - Treat the queue directory as a trusted input boundary.
 - Only Bazarr (or trusted automation) should be able to write `*.json` files to `/queue`.
 - Do not commit `.env` files or share logs that include internal hostnames/URLs.
 
-## Local verification
+## Verification
+
+Run local verification before publishing:
 
 ```bash
 bash -n subsync-monitor.sh
@@ -136,7 +154,21 @@ docker compose config
 docker build -t bazarr-subsync-bridge .
 ```
 
-## Included docs
+## Repository Layout
+
+- `bazarr-postprocess.sh`
+- `subsync-monitor.sh`
+- `subsync-wrapper.sh`
+- `docker-compose.yml`
+- `Dockerfile`
+- `.env.example`
+
+## Contribution Workflow
+
+- commit subject: `type/scope: action object`
+- PR sections: `## Summary`, `## Verification` (plus `## Risk and rollback` / `## Notes` when relevant)
+
+## Included Docs
 
 - `SECURITY.md`
 - `CONTRIBUTING.md`
