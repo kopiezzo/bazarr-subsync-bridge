@@ -65,12 +65,17 @@ BACKUP_FILE="${SUBTITLE_FILE}.bak-$(date +%s)"
 cp "$SUBTITLE_FILE" "$BACKUP_FILE"
 log "Backup created: $BACKUP_FILE"
 
-# Temporary output file (subsync cannot overwrite input file directly)
-# Use a temporary directory to avoid output pattern issues
-TEMP_DIR="/tmp/subsync_$$"
-mkdir -p "$TEMP_DIR"
+# Temporary output file (subsync cannot overwrite input file directly).
+# Use a temporary directory to avoid output pattern issues.
+TEMP_DIR=$(mktemp -d /tmp/subsync.XXXXXX)
 TEMP_OUTPUT="$TEMP_DIR/output.srt"
 rm -f "$TEMP_OUTPUT"
+
+cleanup_temp_dir() {
+    rm -rf "$TEMP_DIR"
+}
+
+trap cleanup_temp_dir EXIT
 
 # Build subsync command
 SUBSYNC_CMD=(
@@ -107,12 +112,9 @@ if "${SUBSYNC_CMD[@]}"; then
             log "Backup kept: $BACKUP_FILE"
         fi
 
-        rm -rf "$TEMP_DIR"
-
         exit 0
     else
         log_error "ERROR Output file was not created: $TEMP_OUTPUT"
-        rm -rf "$TEMP_DIR"
         exit 1
     fi
 else
@@ -122,7 +124,6 @@ else
 
     # Restore backup on failure
     mv "$BACKUP_FILE" "$SUBTITLE_FILE"
-    rm -rf "$TEMP_DIR"
     log_error "Original subtitles restored"
 
     exit $EXIT_CODE
