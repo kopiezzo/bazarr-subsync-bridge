@@ -24,7 +24,8 @@ urlencode() {
 
 refresh_plex() {
     local video_path="$1"
-    local parent_dir=$(dirname "$video_path")
+    local parent_dir
+    parent_dir=$(dirname "$video_path")
 
     if [ -z "$PLEX_URL" ] || [ -z "$PLEX_TOKEN" ]; then
         log "WARN Plex integration disabled (missing PLEX_URL or PLEX_TOKEN)"
@@ -54,6 +55,50 @@ refresh_plex() {
     fi
 }
 
+process_queue_file() {
+    local queue_file="$1"
+    local filename
+    filename=$(basename "$queue_file")
+
+    if [ ! -f "$queue_file" ]; then
+        return 0
+    fi
+
+    log "Processing: $filename"
+
+    local video subtitle sub_lang vid_lang
+    video=$(jq -r '.video // empty' "$queue_file" 2>/dev/null || echo "")
+    subtitle=$(jq -r '.subtitle // empty' "$queue_file" 2>/dev/null || echo "")
+    sub_lang=$(jq -r '.subtitle_lang // empty' "$queue_file" 2>/dev/null || echo "")
+    vid_lang=$(jq -r '.video_lang // empty' "$queue_file" 2>/dev/null || echo "")
+
+    if [ -z "$video" ] || [ -z "$subtitle" ]; then
+        log "ERROR: Invalid JSON format: $filename"
+        rm -f "$queue_file"
+        return 0
+    fi
+
+    log "Video: $(basename "$video")"
+    log "Subtitle: $(basename "$subtitle")"
+    log "Language: $sub_lang -> $vid_lang"
+    log "Running subsync..."
+
+    if /scripts/subsync-wrapper.sh \
+        "$video" \
+        "$subtitle" \
+        "${sub_lang}" \
+        "${vid_lang}" >> "$LOG_DIR/subsync-exec.log" 2>&1; then
+        log "OK SubSync completed successfully"
+        refresh_plex "$video"
+    else
+        local exit_code=$?
+        log "ERROR SubSync failed (code: $exit_code)"
+    fi
+
+    rm -f "$queue_file"
+    log "=========================================="
+}
+
 log "=========================================="
 log "SubSync Queue Monitor v1.1"
 log "=========================================="
@@ -63,7 +108,12 @@ log "Starting monitor loop..."
 
 mkdir -p "$QUEUE_DIR" 2>/dev/null || true
 
-inotifywait -m -e create,moved_to --format '%f' "$QUEUE_DIR" 2>/dev/null | while read filename; do
+for queue_file in "$QUEUE_DIR"/*.json; do
+    [ -e "$queue_file" ] || continue
+    process_queue_file "$queue_file"
+done
+
+inotifywait -m -e create,moved_to --format '%f' "$QUEUE_DIR" 2>/dev/null | while IFS= read -r filename; do
     if [[ ! "$filename" =~ \.json$ ]]; then
         continue
     fi
@@ -71,38 +121,7 @@ inotifywait -m -e create,moved_to --format '%f' "$QUEUE_DIR" 2>/dev/null | while
     QUEUE_FILE="$QUEUE_DIR/$filename"
     sleep 0.5
 
-    log "Processing: $filename"
-
-    VIDEO=$(jq -r '.video // empty' "$QUEUE_FILE" 2>/dev/null || echo "")
-    SUBTITLE=$(jq -r '.subtitle // empty' "$QUEUE_FILE" 2>/dev/null || echo "")
-    SUB_LANG=$(jq -r '.subtitle_lang // empty' "$QUEUE_FILE" 2>/dev/null || echo "")
-    VID_LANG=$(jq -r '.video_lang // empty' "$QUEUE_FILE" 2>/dev/null || echo "")
-
-    if [ -z "$VIDEO" ] || [ -z "$SUBTITLE" ]; then
-        log "ERROR: Invalid JSON format: $filename"
-        rm -f "$QUEUE_FILE"
-        continue
-    fi
-
-    log "Video: $(basename "$VIDEO")"
-    log "Subtitle: $(basename "$SUBTITLE")"
-    log "Language: $SUB_LANG -> $VID_LANG"
-    log "Running subsync..."
-
-    if /scripts/subsync-wrapper.sh \
-        "$VIDEO" \
-        "$SUBTITLE" \
-        "${SUB_LANG}" \
-        "${VID_LANG}" >> "$LOG_DIR/subsync-exec.log" 2>&1; then
-        log "OK SubSync completed successfully"
-        refresh_plex "$VIDEO"
-    else
-        EXIT_CODE=$?
-        log "ERROR SubSync failed (code: $EXIT_CODE)"
-    fi
-
-    rm -f "$QUEUE_FILE"
-    log "=========================================="
+    process_queue_file "$QUEUE_FILE"
 done
 
 log "Monitor stopped"
