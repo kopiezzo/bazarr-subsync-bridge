@@ -15,6 +15,7 @@ jobs:
         run: |
           bash -n subsync-monitor.sh
           bash -n subsync-wrapper.sh
+          bash -n bazarr-postprocess.sh
 
       - name: Docker build
         run: docker build -t bazarr-subsync-bridge .
