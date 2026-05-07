@@ -15,8 +15,8 @@ Applies under `/home/lukasz/docker-builds/subsync`.
 - Existing `*.json` queue jobs must be processed on monitor startup before waiting for new inotify events.
 - Processed queue files should still be drained to avoid reprocessing loops.
 - Preserve subtitle backup behavior unless the task explicitly changes recovery expectations.
-- Plex and Portal refreshes are opportunistic; failures should warn without breaking a successful subtitle sync.
-- Key env groups: queue/log dirs, Plex settings, Portal settings, and `SUBSYNC_*` tuning vars.
+- Plex refresh is opportunistic; failures should warn without breaking a successful subtitle sync.
+- Key env groups: queue/log dirs, Plex settings, and `SUBSYNC_*` tuning vars.
 
 ## Verify
 
