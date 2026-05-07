@@ -1,27 +1,22 @@
 # Code of Conduct
 
-## Our commitment
+Be direct, respectful, and useful.
 
-We are committed to a respectful, harassment-free community for everyone.
+## Expected
 
-## Expected behavior
+- Keep feedback technical and constructive.
+- Assume good intent, but resolve ambiguity with facts.
+- Respect privacy and operational security.
+- Stay focused on the project.
 
-- Be respectful and constructive.
-- Assume good intent.
-- Accept feedback gracefully.
-- Focus on what is best for the project.
-
-## Unacceptable behavior
+## Not Accepted
 
 - Harassment, insults, or discriminatory language.
 - Personal attacks or trolling.
-- Publishing private information without consent.
+- Publishing private information, secrets, logs, or screenshots without consent.
+- Repeated off-topic disruption.
 
 ## Enforcement
 
-Project maintainers may remove, edit, or reject contributions and comments
-that violate this Code of Conduct.
-
-## Scope
-
-This applies in project spaces: issues, pull requests, and discussions.
+Maintainers may edit, close, or remove issues, pull requests, comments, and
+participants that violate this code.
