@@ -1,176 +1,132 @@
 # Bazarr SubSync Bridge
 
-Queue-based subtitle synchronization service for Bazarr workflows, powered by [sc0ty/subsync](https://github.com/sc0ty/subsync).
+Queue-based Bazarr post-processing bridge for
+[SubSync](https://github.com/sc0ty/subsync). Bazarr writes jobs, this service
+processes them one at a time, and Plex can be refreshed after successful sync.
 
-## Features
+## What It Is
 
-- Watches a queue directory for JSON jobs produced by Bazarr post-processing.
-- Runs `subsync` for each `video` and `subtitle` pair.
-- Validates required job fields before processing.
-- Optionally refreshes Plex sections after successful synchronization.
-- Keeps logs and execution artifacts for operational diagnostics.
+- Watches a shared queue directory for `*.json` jobs.
+- Validates each job before processing.
+- Runs `subsync` for a video/subtitle pair.
+- Keeps failed jobs and logs for diagnostics.
+- Optionally refreshes Plex libraries.
+- Drains existing queue jobs on startup.
 
-## Architecture
+## Runtime
 
-- `bazarr-postprocess.sh` - Bazarr hook that writes queue jobs.
-- `subsync-monitor.sh` - queue watcher and job dispatcher.
-- `subsync-wrapper.sh` - `subsync` execution and result handling.
-- `docker-compose.yml` - service runtime mounts and environment.
-- `Dockerfile` - container image with runtime dependencies.
+```text
+Bazarr post-process hook -> queue file -> subsync-monitor.sh -> subsync-wrapper.sh
+```
+
+Important paths inside the container:
+
+- queue: `/queue`
+- logs: `/logs`
+- media: configured by `MEDIA_CONTAINER_PATH`
 
 ## Quickstart
-
-1. Clone this repository.
-2. Copy environment template:
 
 ```bash
 cp .env.example .env
 ```
 
-3. Edit `.env` and set at least:
-   - `MEDIA_HOST_PATH` (absolute host path to your media)
-   - optional Plex variables if you use that integration
-4. Start service:
+Set at least:
+
+- `MEDIA_HOST_PATH`
+- `MEDIA_CONTAINER_PATH`
+
+Optional Plex integration:
+
+- `PLEX_URL`
+- `PLEX_TOKEN`
+- `PLEX_SECTION_SHOWS`
+- `PLEX_SECTION_MOVIES`
+
+Start:
 
 ```bash
 docker compose up -d --build
-```
-
-5. Verify container is running:
-
-```bash
 docker compose ps
-docker compose logs -f subsync
 ```
 
-## Bazarr Integration
+## Bazarr Setup
 
-Use this command in Bazarr custom post-processing:
+Post-processing command:
 
 ```text
 /config/scripts/bazarr-postprocess.sh {{episode}} {{subtitles}} {{subtitles_language_code3}} {{episode_language_code3}}
 ```
 
-### How to install `bazarr-postprocess.sh`
+Checklist:
 
-The script is included in this repository as `bazarr-postprocess.sh`.
+- `bazarr-postprocess.sh` exists in Bazarr's scripts directory.
+- The script is executable.
+- Bazarr writes queue files to a directory shared with this service.
+- The same host media path is mounted into Bazarr and this container.
+- A test subtitle download creates a `job-*.json` file and it is processed.
 
-For a Bazarr container/user:
-
-1. Copy it into Bazarr scripts folder (example):
-
-```bash
-cp bazarr-postprocess.sh /config/scripts/bazarr-postprocess.sh
-chmod +x /config/scripts/bazarr-postprocess.sh
-```
-
-2. Make sure Bazarr writes queue files to a path shared with `subsync`.
-   - In Bazarr environment, set `SUBSYNC_QUEUE_DIR` (example: `/config/scripts/subsync-queue`).
-   - In `subsync` service, mount the same host directory to `/queue`.
-
-3. Make sure media paths from Bazarr (`{{episode}}`, `{{subtitles}}`) exist inside the `subsync` container too.
-   - This is why `MEDIA_HOST_PATH` and `MEDIA_CONTAINER_PATH` must reflect your real mapping.
-
-### Bazarr setup checklist
-
-- [ ] `bazarr-postprocess.sh` exists in Bazarr scripts directory and is executable.
-- [ ] Bazarr post-processing command is exactly:
-  - `/config/scripts/bazarr-postprocess.sh {{episode}} {{subtitles}} {{subtitles_language_code3}} {{episode_language_code3}}`
-- [ ] `SUBSYNC_QUEUE_DIR` points to a directory shared with the `subsync` container.
-- [ ] The shared queue directory is mounted to `/queue` in `subsync`.
-- [ ] Media paths from Bazarr are valid inside `subsync` (same path mapping semantics).
-- [ ] A test subtitle download creates a `job-*.json` file and it disappears after processing.
-- [ ] `docker compose logs -f subsync` shows a successful run (`OK SubSync completed successfully`).
-
-## Queue Job Format
-
-Each job is a JSON file in `/queue` with at least:
+## Job Format
 
 ```json
 {
-  "video": "/media/shows/Show/Season 01/Episode.mkv",
-  "subtitle": "/media/shows/Show/Season 01/Episode.pl.srt",
+  "video": "/media/show/episode.mkv",
+  "subtitle": "/media/show/episode.pl.srt",
   "subtitle_lang": "pol",
   "video_lang": "eng"
 }
 ```
 
-Required keys: `video`, `subtitle`.
+Required keys:
 
-## Configuration
+- `video`
+- `subtitle`
 
-See `.env.example` for all variables.
+## Operations
 
-Common knobs:
-
-- `SUBSYNC_EFFORT`
-- `SUBSYNC_MAX_WINDOW`
-- `SUBSYNC_MIN_CORRELATION`
-- `SUBSYNC_LOG_LEVEL`
-
-Optional integrations:
-
-- Plex: `PLEX_URL`, `PLEX_TOKEN`, `PLEX_SECTION_SHOWS`, `PLEX_SECTION_MOVIES`
-
-## Troubleshooting
-
-### Job processed but sync failed
-
-- Check logs:
-  - `docker compose logs -f subsync`
-  - inspect `/logs/subsync-exec.log` inside mounted logs directory
-
-### "File not found" in wrapper
-
-- Your media mapping is inconsistent.
-- Verify that path from Bazarr exists inside `subsync` container.
-
-### No jobs are being picked up
-
-- Check queue mount:
-  - host queue path from `.env` must be mounted to `/queue`
-- Confirm queue files end with `.json`.
-
-### Plex refresh not triggered
-
-- Missing or invalid `PLEX_URL` or `PLEX_TOKEN`.
-- Sync itself still succeeds; Plex refresh is non-blocking.
-
-## Security Notes
-
-- Treat the queue directory as a trusted input boundary.
-- Only Bazarr (or trusted automation) should be able to write `*.json` files to `/queue`.
-- Do not commit `.env` files or share logs that include internal hostnames/URLs.
-
-## Verification
-
-Run local verification before publishing:
+Watch logs:
 
 ```bash
+docker compose logs -f subsync
+```
+
+Inspect execution log:
+
+```text
+/logs/subsync-exec.log
+```
+
+Common failures:
+
+- `File not found`: Bazarr and this container do not share the same media mapping.
+- queue not draining: queue mount is wrong or files do not end with `.json`.
+- Plex refresh skipped: Plex variables are missing or invalid; subtitle sync can still succeed.
+
+## Verify
+
+```bash
+bash -n bazarr-postprocess.sh
 bash -n subsync-monitor.sh
 bash -n subsync-wrapper.sh
-bash -n bazarr-postprocess.sh
-docker compose config
+docker compose config --quiet
 docker build -t bazarr-subsync-bridge .
 ```
 
-## Repository Layout
+## Security Notes
 
-- `bazarr-postprocess.sh`
-- `subsync-monitor.sh`
-- `subsync-wrapper.sh`
-- `docker-compose.yml`
-- `Dockerfile`
-- `.env.example`
+- Treat `/queue` as a trusted input boundary.
+- Only Bazarr or trusted automation should write queue jobs.
+- Never commit `.env`, Plex tokens, logs, or internal paths you do not want public.
 
-## Contribution Workflow
+## Project Files
 
-- commit subject: `type/scope: action object`
-- PR sections: `## Summary`, `## Verification` (plus `## Risk and rollback` / `## Notes` when relevant)
+- `bazarr-postprocess.sh` - Bazarr hook that writes queue jobs.
+- `subsync-monitor.sh` - queue watcher and dispatcher.
+- `subsync-wrapper.sh` - SubSync execution and result handling.
+- `Dockerfile` - runtime image.
+- `docker-compose.yml` - standalone runtime.
+- `.env.example` - configuration template.
 
-## Included Docs
+## License
 
-- `SECURITY.md`
-- `CONTRIBUTING.md`
-- `CODE_OF_CONDUCT.md`
-- `LICENSE`
+GPL-3.0. See `LICENSE`.

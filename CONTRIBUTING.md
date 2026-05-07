@@ -1,42 +1,38 @@
 # Contributing
 
-Thanks for helping improve this project.
+Keep changes small, operationally clear, and easy to roll back.
 
-## Before you start
+## Flow
 
-- Open an issue first for larger changes.
-- Keep changes focused and avoid unrelated refactors.
+1. Branch from the default branch.
+2. Make one focused change.
+3. Run the verification commands from `README.md`.
+4. Open a pull request with the standard sections.
 
-## Development flow
+## Commit Style
 
-1. Fork or branch from `main`.
-2. Make small, reviewable commits.
-3. Validate changes locally.
-
-Recommended checks:
-
-```bash
-docker build -t bazarr-subsync-bridge .
-bash -n subsync-monitor.sh
-bash -n subsync-wrapper.sh
-```
-
-## Pull request guidelines
-
-- Use required sections:
-  - `## Summary`
-  - `## Verification`
-- Add when relevant:
-  - `## Risk and rollback`
-  - `## Notes`
-
-## Commit style
-
-Use this format:
-
-- `type/scope: action object`
+Use lowercase `type/scope: summary`.
 
 Examples:
 
-- `fix/automation: handle plex refresh timeout`
-- `feat/queue: add payload validation for empty job files`
+- `fix/queue: handle empty job files`
+- `docs/repo: modernize project metadata`
+- `chore/runtime: refresh dependency pins`
+
+## Pull Requests
+
+Required sections:
+
+- `## Summary`
+- `## Verification`
+
+Add when relevant:
+
+- `## Risk and rollback`
+- `## Notes`
+
+## Ground Rules
+
+- Do not commit credentials, `.env`, tokens, logs, or runtime state.
+- Keep queue behavior stable unless the change explicitly targets it.
+- Update docs when commands, env vars, mounts, or runtime flow change.

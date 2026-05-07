@@ -1,9 +1,8 @@
 ## Summary
 - 
-- 
 
 ## Verification
-- `command`
+-
 
 ## Risk and rollback
 - Risk:
