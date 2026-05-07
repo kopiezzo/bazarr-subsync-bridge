@@ -62,6 +62,8 @@ Checklist:
 
 - `bazarr-postprocess.sh` exists in Bazarr's scripts directory.
 - The script is executable.
+- Prefer mounting this repository's `bazarr-postprocess.sh` directly into Bazarr
+  so the runtime hook cannot drift from source control.
 - Bazarr writes queue files to a directory shared with this service.
 - The same host media path is mounted into Bazarr and this container.
 - A test subtitle download creates a `job-*.json` file and it is processed.

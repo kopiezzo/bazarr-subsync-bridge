@@ -15,7 +15,7 @@ PLEX_SECTION_MOVIES="${PLEX_SECTION_MOVIES:-2}"
 mkdir -p "$LOG_DIR"
 
 log() {
-    echo "[$(date +'%Y-%m-%d %H:%M:%S')] $*" | tee -a "$LOG_DIR/monitor.log"
+    echo "[$(date +'%Y-%m-%d %H:%M:%S')] $*"
 }
 
 urlencode() {
