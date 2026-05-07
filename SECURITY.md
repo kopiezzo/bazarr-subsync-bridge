@@ -1,26 +1,31 @@
 # Security Policy
 
-## Supported versions
+## Supported Branch
 
-This repository is maintained on a best-effort basis.
-Please report issues against the latest `main` branch state.
+Security fixes target the latest default branch state.
 
-## Reporting a vulnerability
+## Report a Vulnerability
 
-Please do not open a public issue for security problems.
+Do not open a public issue for security problems.
 
-Use one of these channels:
-- private message to the repository owner,
-- private email shared in repository settings/profile.
+Report privately to the repository owner and include:
 
-Include:
-- clear impact description,
+- impact,
 - reproduction steps,
 - affected files or configuration,
-- suggested fix (if available).
+- relevant logs with secrets removed,
+- suggested fix, if known.
 
-## Response expectations
+## Secrets and Runtime Data
 
-- Initial acknowledgment: within 7 days (best effort).
-- Fix timeline: depends on severity and reproducibility.
-- Disclosure: coordinated disclosure after fix is available.
+Do not share:
+
+- `.env` files,
+- Plex tokens,
+- internal media paths,
+- queue payloads or logs containing private file names.
+
+## Response
+
+This project is maintained on a best-effort basis. Confirmed security issues are
+handled privately first and disclosed only after a fix or mitigation is ready.
