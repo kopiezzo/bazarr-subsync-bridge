@@ -8,7 +8,9 @@ You need Docker with Compose, a media directory accessible to the container, and
 
 ```bash
 cp .env.example .env
-# Set MEDIA_HOST_PATH and MEDIA_CONTAINER_PATH in .env.
+# Set MEDIA_HOST_PATH, MEDIA_CONTAINER_PATH, PUID, and PGID in .env.
+# For the default QUEUE_HOST_PATH and LOGS_HOST_PATH values:
+mkdir -p queue logs
 docker compose up -d --build
 docker compose ps
 ```
@@ -25,12 +27,13 @@ Copy [`.env.example`](.env.example) to `.env` and set the paths for your install
 | `MEDIA_CONTAINER_PATH` | Path for that directory inside the container; it must match paths in Bazarr jobs. |
 | `QUEUE_HOST_PATH` | Host queue directory shared with Bazarr; defaults to `./queue`. |
 | `LOGS_HOST_PATH` | Host directory for logs; defaults to `./logs`. |
+| `PUID`, `PGID` | Numeric user and group IDs for the container; match the owner of the writable queue, log, and subtitle directories. Defaults are `1000:1000`. |
 | `SUBSYNC_QUEUE_DIR` | Bazarr hook's queue path; set it in Bazarr's environment if its default `/config/scripts/subsync-queue` is not the shared directory. |
 | `PLEX_URL`, `PLEX_TOKEN` | Optional Plex refresh; leave both empty to disable it. |
 | `PLEX_SECTION_SHOWS`, `PLEX_SECTION_MOVIES` | Plex section IDs; defaults are `1` and `2`. |
 | `SUBSYNC_*` | Optional sync tuning and backup behavior; defaults are in `.env.example`. |
 
-`QUEUE_DIR` and `LOG_DIR` are container paths and normally stay at `/queue` and `/logs`. Keep `.env`, Plex tokens, logs, and queue payloads out of Git. The queue is a trusted input boundary: only Bazarr or trusted automation should write to it.
+Create the host paths for media, queue, and logs before starting Compose. The default quick start creates `./queue` and `./logs`; if you change either host path, create that directory instead. Check `id -u` and `id -g`, set `PUID` and `PGID` to the user who owns these directories, and give Bazarr write access to the shared queue. Compose will fail when a bind source is missing rather than silently creating it with unsuitable ownership. `/queue` and `/logs` are fixed paths inside the container; old `QUEUE_DIR` and `LOG_DIR` entries in `.env` are ignored. Keep `.env`, Plex tokens, logs, and queue payloads out of Git. The queue is a trusted input boundary: only Bazarr or trusted automation should write to it.
 
 ## Usage
 
