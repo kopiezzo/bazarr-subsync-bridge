@@ -106,22 +106,23 @@ log "Queue dir: $QUEUE_DIR"
 [ -n "$PLEX_URL" ] && log "Plex URL: $PLEX_URL" || log "Plex integration: disabled"
 log "Starting monitor loop..."
 
-mkdir -p "$QUEUE_DIR" 2>/dev/null || true
+mkdir -p "$QUEUE_DIR"
+if [ ! -r "$QUEUE_DIR" ] || [ ! -w "$QUEUE_DIR" ] || [ ! -w "$LOG_DIR" ]; then
+    log "ERROR Queue and log directories must be readable and writable"
+    exit 1
+fi
 
-for queue_file in "$QUEUE_DIR"/*.json; do
-    [ -e "$queue_file" ] || continue
-    process_queue_file "$queue_file"
-done
+# Rescan after each event and timeout. A job created between the scan and
+# inotify registration is picked up by the next scan instead of being stranded.
+while true; do
+    for queue_file in "$QUEUE_DIR"/*.json; do
+        [ -e "$queue_file" ] || continue
+        process_queue_file "$queue_file"
+    done
 
-inotifywait -m -e create,moved_to --format '%f' "$QUEUE_DIR" 2>/dev/null | while IFS= read -r filename; do
-    if [[ ! "$filename" =~ \.json$ ]]; then
-        continue
+    if inotifywait -q -t 10 -e create,moved_to "$QUEUE_DIR" >/dev/null 2>&1; then
+        sleep 0.5
+    else
+        sleep 1
     fi
-
-    QUEUE_FILE="$QUEUE_DIR/$filename"
-    sleep 0.5
-
-    process_queue_file "$QUEUE_FILE"
 done
-
-log "Monitor stopped"
