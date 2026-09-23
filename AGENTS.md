@@ -1,6 +1,6 @@
 # AGENTS.md
 
-Applies under `/home/lukasz/docker-builds/subsync`.
+Applies to this repository in any checkout. The repository is the source of truth for its scripts and container configuration.
 
 ## Scope
 
@@ -20,9 +20,12 @@ Applies under `/home/lukasz/docker-builds/subsync`.
 
 ## Verify
 
-- `docker build -t subsync .`
-- `docker run --rm -e QUEUE_DIR=/queue -v $(pwd)/queue:/queue -v $(pwd)/logs:/logs subsync`
-- `bash ./subsync-wrapper.sh VIDEO SUBTITLE`
+Run only checks relevant to the change and report what was actually verified.
+
+- `bash -n bazarr-postprocess.sh subsync-monitor.sh subsync-wrapper.sh`
+- `docker compose config --quiet`
+- `docker build -t bazarr-subsync-bridge .`
+- Use the Bazarr integration check in `README.md` when the service is available.
 
 ## Keep Updated
 
