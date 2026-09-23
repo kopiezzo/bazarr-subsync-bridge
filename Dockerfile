@@ -49,7 +49,9 @@ RUN pip install --no-cache-dir pybind11
 
 # Download and install subsync
 WORKDIR /tmp/subsync
+COPY patches/subsync-0.17-ffmpeg5.patch /tmp/subsync-0.17-ffmpeg5.patch
 RUN git clone --depth 1 --branch ${SUBSYNC_VERSION} https://github.com/sc0ty/subsync.git . && \
+    git apply /tmp/subsync-0.17-ffmpeg5.patch && \
     pip install --no-cache-dir -r requirements.txt && \
     pip install --no-cache-dir . && \
     cd / && rm -rf /tmp/subsync
