@@ -85,7 +85,6 @@ The included `docker-compose.yml` is a standalone deployment example; a producti
 
 ## Documentation
 
-- [`AGENTS.md`](AGENTS.md) records runtime constraints and verification commands for maintainers and coding agents.
 - [`CONTRIBUTING.md`](CONTRIBUTING.md) explains branches, commits, and pull requests.
 - [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md) sets expectations for project discussions.
 - [`SECURITY.md`](SECURITY.md) explains private vulnerability reporting.
