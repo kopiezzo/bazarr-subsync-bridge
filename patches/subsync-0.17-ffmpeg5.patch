@@ -1,0 +1,12 @@
+diff --git a/gizmo/media/stream.h b/gizmo/media/stream.h
+index 1ba2978..d3f34a4 100644
+--- a/gizmo/media/stream.h
++++ b/gizmo/media/stream.h
+@@ -6,6 +6,7 @@
+ 
+ extern "C"
+ {
++#include <libavcodec/avcodec.h>
+ #include <libavformat/avformat.h>
+ }
+ 

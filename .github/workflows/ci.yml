@@ -22,3 +22,49 @@ jobs:
 
       - name: Docker build
         run: docker build -t bazarr-subsync-bridge .
+
+      - name: SubSync smoke test
+        run: |
+          docker run --rm --entrypoint python bazarr-subsync-bridge -c 'import gizmo'
+          docker run --rm --entrypoint subsync bazarr-subsync-bridge --version
+
+          mkdir -p "$RUNNER_TEMP/subsync-smoke"
+          python3 - <<'PY'
+          from pathlib import Path
+          import os
+
+          output_dir = Path(os.environ['RUNNER_TEMP']) / 'subsync-smoke'
+          phrases = [
+              'The river runs beneath the bridge.',
+              'A red bicycle waits by the gate.',
+              'Please close the window before sunset.',
+              'The library opens at nine tomorrow.',
+              'Fresh bread is cooling in the kitchen.',
+              'Our train leaves from platform seven.',
+              'The old lighthouse overlooks the harbor.',
+              'Three small birds landed on the roof.',
+              'We found the missing key this morning.',
+              'The garden needs water after the heat.',
+          ]
+
+          def srt(offset):
+              cues = []
+              for index, phrase in enumerate(phrases, start=1):
+                  start = index * 4 + offset
+                  cues.append(
+                      f'{index}\n'
+                      f'00:00:{start:02d},000 --> 00:00:{start + 2:02d},000\n'
+                      f'{phrase}\n'
+                  )
+              return '\n'.join(cues)
+
+          (output_dir / 'reference.srt').write_text(srt(0))
+          (output_dir / 'shifted.srt').write_text(srt(2))
+          PY
+
+          docker run --rm --user "$(id -u):$(id -g)" \
+            -v "$RUNNER_TEMP/subsync-smoke:/smoke" \
+            --entrypoint subsync bazarr-subsync-bridge \
+            --cli sync --sub /smoke/shifted.srt --ref /smoke/reference.srt \
+            --out /smoke/output.srt --effort=0.1 --min-correlation=0.1 --min-points-no=5
+          test -s "$RUNNER_TEMP/subsync-smoke/output.srt"

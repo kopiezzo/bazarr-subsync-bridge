@@ -1,8 +1,8 @@
 # Dockerfile - SubSync Container
 # Combined: subsync (subtitle sync) + monitor (queue watcher)
-# Base: Python 3.11 on Debian Bullseye for FFmpeg compatibility
+# Base: Python 3.11 on supported Debian Bookworm with FFmpeg and PocketSphinx
 
-FROM python:3.11-slim-bullseye
+FROM python:3.11-slim-bookworm
 
 # Metadata
 LABEL maintainer="bazarr-subsync-bridge maintainers"
@@ -49,7 +49,9 @@ RUN pip install --no-cache-dir pybind11
 
 # Download and install subsync
 WORKDIR /tmp/subsync
+COPY patches/subsync-0.17-ffmpeg5.patch /tmp/subsync-0.17-ffmpeg5.patch
 RUN git clone --depth 1 --branch ${SUBSYNC_VERSION} https://github.com/sc0ty/subsync.git . && \
+    git apply /tmp/subsync-0.17-ffmpeg5.patch && \
     pip install --no-cache-dir -r requirements.txt && \
     pip install --no-cache-dir . && \
     cd / && rm -rf /tmp/subsync
