@@ -42,7 +42,7 @@ Set this Bazarr post-processing command:
 /config/scripts/bazarr-postprocess.sh {{episode}} {{subtitles}} {{subtitles_language_code3}} {{episode_language_code3}}
 ```
 
-The hook writes an atomic `job-*.json` file. The monitor processes existing jobs on startup, then watches for new files. Jobs require `video` and `subtitle`; language fields are optional. The wrapper backs up the subtitle before synchronization and restores it if SubSync fails. A successful run removes the backup unless `SUBSYNC_KEEP_BACKUP` is nonzero. The monitor removes the queue file after an attempt, including a failed attempt; inspect logs for failures rather than expecting jobs to remain queued. Plex refresh failure is logged and does not turn a successful sync into a failed job.
+The hook writes an atomic `job-*.json` file. The monitor processes existing jobs on startup, then watches for new files. Jobs require `video` and `subtitle`; language fields are optional. The wrapper backs up the subtitle before synchronization, writes its output beside the subtitle, and replaces the original atomically after success. A failed synchronization restores the original; a failed replacement keeps the original and its backup. A successful run removes the backup unless `SUBSYNC_KEEP_BACKUP` is nonzero. The monitor removes the queue file after an attempt, including a failed attempt; inspect logs for failures rather than expecting jobs to remain queued. Plex refresh failure is logged and does not turn a successful sync into a failed job.
 
 Example queue payload:
 

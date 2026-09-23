@@ -65,9 +65,10 @@ BACKUP_FILE="${SUBTITLE_FILE}.bak-$(date +%s)"
 cp "$SUBTITLE_FILE" "$BACKUP_FILE"
 log "Backup created: $BACKUP_FILE"
 
-# Temporary output file (subsync cannot overwrite input file directly).
-# Use a temporary directory to avoid output pattern issues.
-TEMP_DIR=$(mktemp -d /tmp/subsync.XXXXXX)
+# Keep the output beside the subtitle so the final rename is atomic even when
+# /tmp and the media mount are on different filesystems.
+SUBTITLE_DIR=$(dirname -- "$SUBTITLE_FILE")
+TEMP_DIR=$(mktemp -d "$SUBTITLE_DIR/.subsync.XXXXXX")
 TEMP_OUTPUT="$TEMP_DIR/output.srt"
 rm -f "$TEMP_OUTPUT"
 
@@ -101,7 +102,10 @@ if "${SUBSYNC_CMD[@]}"; then
 
     # Move temporary output to target subtitle path
     if [ -f "$TEMP_OUTPUT" ]; then
-        mv "$TEMP_OUTPUT" "$SUBTITLE_FILE"
+        if ! mv -- "$TEMP_OUTPUT" "$SUBTITLE_FILE"; then
+            log_error "Could not replace subtitles; original and backup were kept"
+            exit 1
+        fi
         log "Subtitles synchronized: $SUBTITLE_FILE"
 
         # Remove backup after success (optional)
