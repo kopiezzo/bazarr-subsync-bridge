@@ -2,16 +2,28 @@ services:
   subsync:
     build:
       context: .
+      args:
+        PUID: ${PUID:-1000}
+        PGID: ${PGID:-1000}
     image: bazarr-subsync-bridge:latest
     container_name: subsync
     restart: unless-stopped
     env_file:
       - path: .env
         required: false
-    environment:
-      QUEUE_DIR: ${QUEUE_DIR:-/queue}
-      LOG_DIR: ${LOG_DIR:-/logs}
     volumes:
-      - ${QUEUE_HOST_PATH:-./queue}:/queue
-      - ${LOGS_HOST_PATH:-./logs}:/logs
-      - ${MEDIA_HOST_PATH:-./media}:${MEDIA_CONTAINER_PATH:-/media}
+      - type: bind
+        source: ${QUEUE_HOST_PATH:-./queue}
+        target: /queue
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ${LOGS_HOST_PATH:-./logs}
+        target: /logs
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ${MEDIA_HOST_PATH:-./media}
+        target: ${MEDIA_CONTAINER_PATH:-/media}
+        bind:
+          create_host_path: false
