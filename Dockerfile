@@ -78,9 +78,10 @@ RUN groupadd -g ${PGID} subsync && \
 
 USER subsync
 
-# Healthcheck - verify monitor process is running
+# Healthcheck - ask Supervisor for the monitor state instead of matching the
+# healthcheck shell's own command line.
 HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
-    CMD pgrep -f inotifywait > /dev/null || exit 1
+    CMD supervisorctl -c /etc/supervisor/conf.d/subsync.conf status subsync-monitor | grep -Eq '^subsync-monitor[[:space:]]+RUNNING([[:space:]]|$)'
 
 # Start supervisord to manage monitor process
 CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/subsync.conf"]
