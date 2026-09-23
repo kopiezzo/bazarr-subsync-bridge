@@ -84,7 +84,15 @@ jobs:
           docker exec subsync sh -c 'test -w /queue && test -w /logs'
 
           health_cmd=$(docker image inspect bazarr-subsync-bridge --format '{{index .Config.Healthcheck.Test 1}}')
-          docker exec subsync sh -c "$health_cmd"
+          ready=0
+          for attempt in $(seq 1 30); do
+            if docker exec subsync sh -c "$health_cmd"; then
+              ready=1
+              break
+            fi
+            sleep 1
+          done
+          test "$ready" -eq 1
           docker exec subsync supervisorctl -c /etc/supervisor/conf.d/subsync.conf stop subsync-monitor
           if docker exec subsync sh -c "$health_cmd"; then
             echo 'Health check reported success with the monitor stopped' >&2
