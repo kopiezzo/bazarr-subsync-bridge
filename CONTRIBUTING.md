@@ -1,6 +1,6 @@
 # Contributing
 
-Keep changes focused, verifiable, and easy to review. Read [`AGENTS.md`](AGENTS.md) before changing runtime behavior.
+Keep changes focused, verifiable, and easy to review. Read the [README](README.md) before changing runtime behavior.
 
 ## Workflow
 
