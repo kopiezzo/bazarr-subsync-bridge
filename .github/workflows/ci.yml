@@ -21,7 +21,7 @@ jobs:
           bash -n bazarr-postprocess.sh
 
       - name: Docker build
-        run: docker build -t bazarr-subsync-bridge .
+        run: docker build --build-arg PUID="$(id -u)" --build-arg PGID="$(id -g)" -t bazarr-subsync-bridge .
 
       - name: SubSync smoke test
         run: |
@@ -68,3 +68,27 @@ jobs:
             --cli sync --sub /smoke/shifted.srt --ref /smoke/reference.srt \
             --out /smoke/output.srt --effort=0.1 --min-correlation=0.1 --min-points-no=5
           test -s "$RUNNER_TEMP/subsync-smoke/output.srt"
+
+      - name: Compose startup and health check
+        run: |
+          smoke_dir="$RUNNER_TEMP/subsync-compose"
+          mkdir -p "$smoke_dir/media" "$smoke_dir/queue" "$smoke_dir/logs"
+          export MEDIA_HOST_PATH="$smoke_dir/media"
+          export QUEUE_HOST_PATH="$smoke_dir/queue"
+          export LOGS_HOST_PATH="$smoke_dir/logs"
+          export PUID="$(id -u)" PGID="$(id -g)"
+
+          docker compose config --quiet
+          docker compose up -d --no-build
+          trap 'docker compose down' EXIT
+          docker exec subsync sh -c 'test -w /queue && test -w /logs'
+
+          health_cmd=$(docker image inspect bazarr-subsync-bridge --format '{{index .Config.Healthcheck.Test 1}}')
+          docker exec subsync sh -c "$health_cmd"
+          docker exec subsync supervisorctl -c /etc/supervisor/conf.d/subsync.conf stop subsync-monitor
+          if docker exec subsync sh -c "$health_cmd"; then
+            echo 'Health check reported success with the monitor stopped' >&2
+            exit 1
+          fi
+          docker exec subsync supervisorctl -c /etc/supervisor/conf.d/subsync.conf start subsync-monitor
+          docker exec subsync sh -c "$health_cmd"
