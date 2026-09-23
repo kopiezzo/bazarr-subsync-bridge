@@ -66,5 +66,5 @@ jobs:
             -v "$RUNNER_TEMP/subsync-smoke:/smoke" \
             --entrypoint subsync bazarr-subsync-bridge \
             --cli sync --sub /smoke/shifted.srt --ref /smoke/reference.srt \
-            --out /smoke/output.srt --effort=0.1 --min-correlation=0.1
+            --out /smoke/output.srt --effort=0.1 --min-correlation=0.1 --min-points-no=5
           test -s "$RUNNER_TEMP/subsync-smoke/output.srt"
