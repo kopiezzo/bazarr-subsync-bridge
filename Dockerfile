@@ -1,8 +1,8 @@
 # Dockerfile - SubSync Container
 # Combined: subsync (subtitle sync) + monitor (queue watcher)
-# Base: Python 3.11 on Debian Bullseye for FFmpeg compatibility
+# Base: Python 3.11 on supported Debian Bookworm with FFmpeg and PocketSphinx
 
-FROM python:3.11-slim-bullseye
+FROM python:3.11-slim-bookworm
 
 # Metadata
 LABEL maintainer="bazarr-subsync-bridge maintainers"
