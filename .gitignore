@@ -1,5 +1,3 @@
-.codebase/
-
 # Local runtime artifacts
 logs/
 queue/

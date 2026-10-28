@@ -8,6 +8,20 @@ permissions:
   contents: read
 
 jobs:
+  pr-title:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check pull request title
+        env:
+          TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          pattern='^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\([a-z0-9][a-z0-9-]*\))?!?: [^[:space:]].*[^.]$'
+          if [[ ! $TITLE =~ $pattern ]] || (( ${#TITLE} > 72 )); then
+            echo "Pull request title must be 'type(scope): summary', at most 72 characters, no trailing period: $TITLE" >&2
+            exit 1
+          fi
+
   smoke:
     runs-on: ubuntu-latest
     steps:

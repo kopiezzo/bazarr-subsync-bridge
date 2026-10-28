@@ -1,4 +1,4 @@
-# Code of Conduct
+# Code of conduct
 
 Be direct, respectful, and useful.
 
@@ -9,7 +9,7 @@ Be direct, respectful, and useful.
 - Respect privacy and operational security.
 - Stay focused on the project.
 
-## Not Accepted
+## Not accepted
 
 - Harassment, insults, or discriminatory language.
 - Personal attacks or trolling.
@@ -18,5 +18,4 @@ Be direct, respectful, and useful.
 
 ## Enforcement
 
-Maintainers may edit, close, or remove issues, pull requests, comments, and
-participants that violate this code.
+Maintainers may edit, close, or remove issues, pull requests, comments, and participants that violate this code.
