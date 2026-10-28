@@ -75,7 +75,10 @@ jobs:
           test "$(docker inspect -f '{{.State.Health.Status}}' subsync)" = healthy
 
           before=$(sha256sum media/episode.srt)
-          ! python3 tests/make_subtitles.py --check media/reference.srt media/episode.srt
+          if python3 tests/make_subtitles.py --check media/reference.srt media/episode.srt; then
+            echo 'the test subtitle must start shifted' >&2
+            exit 1
+          fi
           printf '{"video": "/media/reference.srt", "subtitle": "/media/episode.srt", "subtitle_lang": "eng", "video_lang": "eng"}' > queue/job-1-1.json.tmp
           mv queue/job-1-1.json.tmp queue/job-1-1.json
           for _ in $(seq 120); do

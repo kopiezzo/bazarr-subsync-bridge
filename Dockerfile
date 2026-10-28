@@ -10,9 +10,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         libpocketsphinx-dev libsphinxbase-dev \
     && rm -rf /var/lib/apt/lists/*
 
+# The tag and the commit it must point to: a moved tag fails the build instead of changing the code.
 ARG SUBSYNC_VERSION=0.17
+ARG SUBSYNC_COMMIT=be5390d00ff475b6543eb0140c7e65b34317d95b
 COPY patches/ /patches/
 RUN git clone --depth 1 --branch "${SUBSYNC_VERSION}" https://github.com/sc0ty/subsync.git /src \
+    && test "$(git -C /src rev-parse HEAD)" = "${SUBSYNC_COMMIT}" \
     && git -C /src apply /patches/subsync-0.17-ffmpeg5.patch \
     && python -m venv /opt/venv \
     && LDFLAGS="-Wl,--as-needed" /opt/venv/bin/pip install --no-cache-dir -r /src/requirements.txt /src \
