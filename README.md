@@ -1,53 +1,68 @@
 # Bazarr SubSync Bridge
 
-Bazarr SubSync Bridge queues Bazarr post-processing jobs and runs [SubSync](https://github.com/sc0ty/subsync) on subtitle files one job at a time. It can request a Plex library refresh after a successful sync. This repository contains the container, Bazarr hook, and a standalone Docker Compose configuration.
+Bazarr SubSync Bridge queues Bazarr post-processing jobs and runs [SubSync](https://github.com/sc0ty/subsync) on each subtitle file, one job at a time, with an optional Plex library refresh after a successful sync. It runs as a Docker container next to Bazarr and shares a queue directory with it.
+
+## Layout
+
+| Path | Contents |
+| --- | --- |
+| `bazarr-postprocess.sh` | Bazarr post-processing hook that writes a job to the shared queue |
+| `subsync-monitor.sh` | queue monitor that processes jobs on startup and on filesystem events |
+| `subsync-wrapper.sh` | one sync: subtitle backup, SubSync run, atomic replace, optional Plex refresh |
+| `supervisord.conf` | process supervision for the monitor inside the container |
+| `Dockerfile` | image based on Python 3.11 on Debian Bookworm, with SubSync and a health check |
+| `patches/` | SubSync 0.17 patch for FFmpeg 5 |
+| `docker-compose.yml`, `.env.example` | standalone deployment and its settings |
+| `.github/` | CI, issue templates, and the pull request template |
 
 ## Quick start
 
-You need Docker with Compose, a media directory accessible to the container, and a Bazarr installation that can run a Python 3 post-processing hook. The Bazarr hook and container must share a writable queue directory and see the same media paths.
+You need Docker with Compose, a media directory the container can read and write, and a Bazarr installation that can run a post-processing hook. Bazarr and the container must share a writable queue directory and see media under the same paths.
 
 ```bash
-cp .env.example .env
-# Set MEDIA_HOST_PATH, MEDIA_CONTAINER_PATH, PUID, and PGID in .env.
-# For the default QUEUE_HOST_PATH and LOGS_HOST_PATH values:
-mkdir -p queue logs
+cp .env.example .env  # set MEDIA_HOST_PATH, MEDIA_CONTAINER_PATH, PUID, and PGID
+mkdir -p queue logs   # default QUEUE_HOST_PATH and LOGS_HOST_PATH
 docker compose up -d --build
 docker compose ps
 ```
 
-Configure Bazarr to run [`bazarr-postprocess.sh`](bazarr-postprocess.sh) and share its queue with the container as described in [Usage](#usage). The container alone waits for jobs; it does not download subtitles.
+Then configure the Bazarr hook as described in [Usage](#usage). The container alone only waits for jobs; it does not download subtitles.
 
 ## Configuration
 
-Copy [`.env.example`](.env.example) to `.env` and set the paths for your installation. The Compose file mounts `${MEDIA_HOST_PATH}` at `${MEDIA_CONTAINER_PATH}` and uses `./queue` and `./logs` by default for persistent queue and log storage.
+Settings are read from `.env`, created from [`.env.example`](.env.example).
 
-| Setting | Purpose |
-| --- | --- |
-| `MEDIA_HOST_PATH` | Host directory containing media files; set this to a real path before starting. |
-| `MEDIA_CONTAINER_PATH` | Path for that directory inside the container; it must match paths in Bazarr jobs. |
-| `QUEUE_HOST_PATH` | Host queue directory shared with Bazarr; defaults to `./queue`. |
-| `LOGS_HOST_PATH` | Host directory for logs; defaults to `./logs`. |
-| `PUID`, `PGID` | Numeric user and group IDs for the container; match the owner of the writable queue, log, and subtitle directories. Defaults are `1000:1000`. |
-| `SUBSYNC_QUEUE_DIR` | Bazarr hook's queue path; set it in Bazarr's environment if its default `/config/scripts/subsync-queue` is not the shared directory. |
-| `PLEX_URL`, `PLEX_TOKEN` | Optional Plex refresh; leave both empty to disable it. |
-| `PLEX_SECTION_SHOWS`, `PLEX_SECTION_MOVIES` | Plex section IDs; defaults are `1` and `2`. |
-| `SUBSYNC_*` | Optional sync tuning and backup behavior; defaults are in `.env.example`. |
+| Variable | Purpose | Default |
+| --- | --- | --- |
+| `MEDIA_HOST_PATH` | host directory with media files | none, set before starting |
+| `MEDIA_CONTAINER_PATH` | the same directory inside the container; must match paths in Bazarr jobs | `/media` |
+| `QUEUE_HOST_PATH` | host queue directory shared with Bazarr | `./queue` |
+| `LOGS_HOST_PATH` | host directory for logs | `./logs` |
+| `PUID`, `PGID` | user and group inside the container; match the owner of the queue, log, and subtitle directories | `1000`, `1000` |
+| `SUBSYNC_QUEUE_DIR` | queue path seen by the Bazarr hook, set in Bazarr's environment | `/config/scripts/subsync-queue` |
+| `PLEX_URL`, `PLEX_TOKEN` | optional Plex refresh; leave both empty to disable it | empty |
+| `PLEX_SECTION_SHOWS`, `PLEX_SECTION_MOVIES` | Plex library section IDs | `1`, `2` |
+| `SUBSYNC_LOG_LEVEL`, `SUBSYNC_EFFORT`, `SUBSYNC_MAX_WINDOW`, `SUBSYNC_MIN_CORRELATION` | sync tuning | `1`, `0.5`, `600`, `0.5` |
+| `SUBSYNC_KEEP_BACKUP` | keep the subtitle backup after a successful sync | `0` |
 
-Create the host paths for media, queue, and logs before starting Compose. The default quick start creates `./queue` and `./logs`; if you change either host path, create that directory instead. Check `id -u` and `id -g`, set `PUID` and `PGID` to the user who owns these directories, and give Bazarr write access to the shared queue. Compose will fail when a bind source is missing rather than silently creating it with unsuitable ownership. `/queue` and `/logs` are fixed paths inside the container; old `QUEUE_DIR` and `LOG_DIR` entries in `.env` are ignored. Keep `.env`, Plex tokens, logs, and queue payloads out of Git. The queue is a trusted input boundary: only Bazarr or trusted automation should write to it.
+- **Host paths:** create the media, queue, and log directories before starting Compose. Compose fails when a bind source is missing instead of creating it with the wrong owner. Check `id -u` and `id -g` and set `PUID` and `PGID` to the owner of these directories.
+- **Container paths:** `/queue` and `/logs` are fixed inside the container. Old `QUEUE_DIR` and `LOG_DIR` entries in `.env` are ignored.
+- **Secrets:** keep `.env`, Plex tokens, logs, and queue payloads out of Git.
+- **Trust boundary:** the queue is a trusted input. Only Bazarr or trusted automation should write to it.
 
 ## Usage
 
-Make `bazarr-postprocess.sh` available in Bazarr's scripts directory, preferably by mounting the version from this repository. Ensure it is executable and its `SUBSYNC_QUEUE_DIR` resolves to the same host directory mounted into the container as `/queue`. Bazarr and the container must use the same media path for each file.
+### Bazarr hook
 
-Set this Bazarr post-processing command:
+Make `bazarr-postprocess.sh` available in Bazarr's scripts directory, preferably by mounting the version from this repository, and make it executable. Its `SUBSYNC_QUEUE_DIR` must resolve to the host directory mounted into the container as `/queue`. Set this Bazarr post-processing command:
 
 ```text
 /config/scripts/bazarr-postprocess.sh {{episode}} {{subtitles}} {{subtitles_language_code3}} {{episode_language_code3}}
 ```
 
-The hook writes an atomic `job-*.json` file. The monitor processes existing jobs on startup and rescans the queue after filesystem events or a short timeout, so a job arriving during startup is not stranded. Jobs require `video` and `subtitle`; language fields are optional. The wrapper backs up the subtitle before synchronization, writes its output beside the subtitle, and replaces the original atomically after success. A failed synchronization restores the original; a failed replacement keeps the original and its backup. A successful run removes the backup unless `SUBSYNC_KEEP_BACKUP` is nonzero. The monitor removes the queue file after an attempt, including a failed attempt; inspect logs for failures rather than expecting jobs to remain queued. Plex refresh failure is logged and does not turn a successful sync into a failed job.
+### Queue jobs
 
-Example queue payload:
+The hook writes an atomic `job-*.json` file. Jobs require `video` and `subtitle`; language fields are optional.
 
 ```json
 {
@@ -58,7 +73,11 @@ Example queue payload:
 }
 ```
 
-Runtime flow:
+- **Startup:** the monitor processes existing jobs on startup and rescans the queue after filesystem events or a short timeout, so a job that arrives during startup is not stranded.
+- **Sync:** the wrapper backs up the subtitle, writes the SubSync output beside it, and replaces the original atomically after success. A failed sync restores the original; a failed replace keeps the original and its backup.
+- **Backups:** a successful run removes the backup unless `SUBSYNC_KEEP_BACKUP` is nonzero.
+- **Queue files:** the monitor removes the job file after every attempt, including a failed one, so failures are found in the logs.
+- **Plex:** a failed Plex refresh is logged and does not turn a successful sync into a failed job.
 
 ```text
 Bazarr hook -> shared queue -> subsync-monitor.sh -> subsync-wrapper.sh -> optional Plex refresh
@@ -66,32 +85,30 @@ Bazarr hook -> shared queue -> subsync-monitor.sh -> subsync-wrapper.sh -> optio
 
 ## Verification
 
-Check shell syntax and the Compose configuration before deployment:
-
 ```bash
 bash -n bazarr-postprocess.sh subsync-monitor.sh subsync-wrapper.sh
 docker compose config --quiet
 docker build -t bazarr-subsync-bridge .
 ```
 
-After starting the service, run a Bazarr subtitle download and confirm a `job-*.json` file appears in the shared queue and is processed. Check `docker compose ps`, `docker compose logs -f subsync`, and the execution log in the configured log directory (`/logs/subsync-exec.log` inside the container). A failed sync is reported in the logs and its queue file is removed.
+After starting the service, download a subtitle in Bazarr and confirm that a `job-*.json` file appears in the shared queue and is processed. Check `docker compose ps`, `docker compose logs -f subsync`, and `/logs/subsync-exec.log` inside the container.
 
 ## Troubleshooting
 
-- `File not found`: check that Bazarr job paths match the container's media mount.
-- Queue not draining: check the shared queue mount and confirm jobs end in `.json`.
-- Plex refresh skipped or failed: check `PLEX_URL`, `PLEX_TOKEN`, and section IDs. Subtitle sync can still succeed.
+- **`File not found`:** Bazarr job paths do not match the container's media mount.
+- **Queue not draining:** check the shared queue mount and confirm that job files end in `.json`.
+- **Plex refresh skipped or failed:** check `PLEX_URL`, `PLEX_TOKEN`, and the section IDs. The subtitle sync can still succeed.
 
 ## Deployment and rollback
 
-The included `docker-compose.yml` is a standalone deployment example; a production target and release process are not established in this repository. Keep the previous known-good image or commit before updating. If an update fails, redeploy that version using the same `.env` and persistent queue, log, and media mounts, then verify with the checks above. Preserve subtitle backups and inspect any failed job before retrying it.
+The included `docker-compose.yml` is a standalone deployment example. Keep the previous known-good image or commit before updating. If an update fails, redeploy that version with the same `.env` and the same queue, log, and media mounts, then run the checks from [Verification](#verification). Inspect any failed job before retrying it.
 
 ## Documentation
 
-- [`CONTRIBUTING.md`](CONTRIBUTING.md) explains branches, commits, and pull requests.
-- [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md) sets expectations for project discussions.
-- [`SECURITY.md`](SECURITY.md) explains private vulnerability reporting.
+- [`CONTRIBUTING.md`](CONTRIBUTING.md): branches, commit format, pull requests, and releases
+- [`SECURITY.md`](SECURITY.md): private vulnerability reporting
+- [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md): expectations for project discussions
 
 ## License
 
-This project is licensed under GPL-3.0. See [`LICENSE`](LICENSE).
+GPL-3.0, see [`LICENSE`](LICENSE).
