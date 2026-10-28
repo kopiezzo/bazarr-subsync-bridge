@@ -13,8 +13,8 @@ List the smallest steps to reproduce the problem.
 
 ## Environment
 
-Include the relevant version, deployment method, and configuration names. Remove secrets, media paths, and private log content.
+Include the image tag (`BRIDGE_VERSION`) or commit, the deployment method, and the names of the settings you changed. Remove secrets, media paths, and private log content.
 
 ## Evidence
 
-Include sanitized error text or logs if needed. State whether the issue is repeatable.
+Include the sanitized lines from `bridge.log` for the failing job, from `Job:` to the result. State whether the issue is repeatable.

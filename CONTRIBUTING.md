@@ -29,7 +29,9 @@ Example: `fix(bridge): keep an interrupted job queued`.
 
 ## Releases
 
-Releases use annotated semantic version tags (`v1.2.0`). Pushing the tag runs the release workflow, which publishes the image for `linux/amd64` and `linux/arm64` as `ghcr.io/kopiezzo/bazarr-subsync-bridge` with the version, `major.minor`, `major`, and `latest` tags. The GitHub release has the same title and lists changes grouped as Features, Fixes, and Other.
+Releases use annotated semantic version tags (`v1.2.0`). Pushing the tag runs the release workflow, which publishes the image for `linux/amd64` and `linux/arm64` as `ghcr.io/kopiezzo/bazarr-subsync-bridge` with the version, `major.minor`, `major`, and `latest` tags. The GitHub release has the same title and lists changes grouped as Features, Fixes, and Other. Pull requests that touch the `Dockerfile`, `patches/`, or the release workflow also run it as a dry run that builds both platforms and publishes nothing.
+
+Dependabot opens one grouped pull request a month for GitHub Actions and one for the base image. Merge it when CI and, where it runs, the release dry run pass.
 
 ## Safety
 
