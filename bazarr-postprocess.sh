@@ -1,4 +1,6 @@
 #!/bin/bash
+# Bazarr post-processing hook: queue a SubSync job for Bazarr SubSync Bridge.
+# Bazarr command: bazarr-postprocess.sh {{episode}} {{subtitles}} {{subtitles_language_code3}} {{episode_language_code3}}
 
 set -euo pipefail
 
@@ -7,39 +9,24 @@ if [ "$#" -lt 2 ]; then
     exit 1
 fi
 
-VIDEO_FILE="$1"
-SUBTITLE_FILE="$2"
-SUBTITLE_LANG="${3:-}"
-VIDEO_LANG="${4:-}"
-
-# Directory shared with subsync container as /queue.
+# Directory shared with the bridge container as /queue
 QUEUE_DIR="${SUBSYNC_QUEUE_DIR:-/config/scripts/subsync-queue}"
-
 mkdir -p "$QUEUE_DIR"
-JOB_FILE="$QUEUE_DIR/job-$(date +%s)-$$.json"
 
-python3 - "$VIDEO_FILE" "$SUBTITLE_FILE" "$SUBTITLE_LANG" "$VIDEO_LANG" "$JOB_FILE" <<'PY'
-import json
-import os
-import sys
+# The job is written as *.json.tmp and renamed, so the bridge never reads a partial file.
+python3 - "$QUEUE_DIR" "$@" <<'PY'
+import json, os, sys, time
 
-video, subtitle, subtitle_lang, video_lang, job_file = sys.argv[1:6]
+queue, video, subtitle = sys.argv[1:4]
+langs = (sys.argv[4:6] + ["", ""])[:2]
+job = {"video": video, "subtitle": subtitle}
+for key, value in zip(("subtitle_lang", "video_lang"), langs):
+    if value:
+        job[key] = value
 
-payload = {
-    "video": video,
-    "subtitle": subtitle,
-}
-
-if subtitle_lang:
-    payload["subtitle_lang"] = subtitle_lang
-if video_lang:
-    payload["video_lang"] = video_lang
-
-tmp_file = f"{job_file}.tmp"
-with open(tmp_file, "w", encoding="utf-8") as handle:
-    json.dump(payload, handle, ensure_ascii=False)
-
-os.replace(tmp_file, job_file)
+path = os.path.join(queue, f"job-{time.time_ns()}-{os.getpid()}.json")
+with open(path + ".tmp", "w", encoding="utf-8") as f:
+    json.dump(job, f, ensure_ascii=False)
+os.replace(path + ".tmp", path)
+print(f"[subsync-postprocess] queued: {path}", file=sys.stderr)
 PY
-
-echo "[subsync-postprocess] queued: $JOB_FILE" >&2

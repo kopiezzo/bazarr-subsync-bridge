@@ -2,6 +2,7 @@ name: CI
 
 on:
   push:
+    branches: [main]
   pull_request:
 
 permissions:
@@ -22,95 +23,71 @@ jobs:
             exit 1
           fi
 
-  smoke:
+  test:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Shell syntax check
+      - name: Unit tests
+        run: python3 -m unittest discover -s tests -v
+
+      - name: Shell check
+        run: shellcheck bazarr-postprocess.sh
+
+      - name: Compose configuration
+        run: docker compose config --quiet
+
+  image:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          load: true
+          tags: ghcr.io/kopiezzo/bazarr-subsync-bridge:latest
+          cache-from: type=gha,scope=linux/amd64
+          cache-to: type=gha,mode=max,scope=linux/amd64
+
+      - name: Image size
+        run: docker image inspect -f '{{.Size}}' ghcr.io/kopiezzo/bazarr-subsync-bridge:latest | numfmt --to=iec
+
+      - name: Sync a subtitle through the queue
         run: |
-          bash -n subsync-monitor.sh
-          bash -n subsync-wrapper.sh
-          bash -n bazarr-postprocess.sh
+          set -euo pipefail
+          mkdir -p queue logs media
+          export MEDIA_HOST_PATH="$PWD/media" PUID="$(id -u)" PGID="$(id -g)"
+          printf 'SUBSYNC_EFFORT=0.5\nSUBSYNC_MIN_CORRELATION=0.1\n' > .env
+          python3 tests/make_subtitles.py media/reference.srt media/episode.srt
 
-      - name: Docker build
-        run: docker build --build-arg PUID="$(id -u)" --build-arg PGID="$(id -g)" -t bazarr-subsync-bridge .
-
-      - name: SubSync smoke test
-        run: |
-          docker run --rm --entrypoint python bazarr-subsync-bridge -c 'import gizmo'
-          docker run --rm --entrypoint subsync bazarr-subsync-bridge --version
-
-          mkdir -p "$RUNNER_TEMP/subsync-smoke"
-          python3 - <<'PY'
-          from pathlib import Path
-          import os
-
-          output_dir = Path(os.environ['RUNNER_TEMP']) / 'subsync-smoke'
-          phrases = [
-              'The river runs beneath the bridge.',
-              'A red bicycle waits by the gate.',
-              'Please close the window before sunset.',
-              'The library opens at nine tomorrow.',
-              'Fresh bread is cooling in the kitchen.',
-              'Our train leaves from platform seven.',
-              'The old lighthouse overlooks the harbor.',
-              'Three small birds landed on the roof.',
-              'We found the missing key this morning.',
-              'The garden needs water after the heat.',
-          ]
-
-          def srt(offset):
-              cues = []
-              for index, phrase in enumerate(phrases, start=1):
-                  start = index * 4 + offset
-                  cues.append(
-                      f'{index}\n'
-                      f'00:00:{start:02d},000 --> 00:00:{start + 2:02d},000\n'
-                      f'{phrase}\n'
-                  )
-              return '\n'.join(cues)
-
-          (output_dir / 'reference.srt').write_text(srt(0))
-          (output_dir / 'shifted.srt').write_text(srt(2))
-          PY
-
-          docker run --rm --user "$(id -u):$(id -g)" \
-            -v "$RUNNER_TEMP/subsync-smoke:/smoke" \
-            --entrypoint subsync bazarr-subsync-bridge \
-            --cli sync --sub /smoke/shifted.srt --ref /smoke/reference.srt \
-            --out /smoke/output.srt --effort=0.1 --min-correlation=0.1 --min-points-no=5
-          test -s "$RUNNER_TEMP/subsync-smoke/output.srt"
-
-      - name: Compose startup and health check
-        run: |
-          smoke_dir="$RUNNER_TEMP/subsync-compose"
-          mkdir -p "$smoke_dir/media" "$smoke_dir/queue" "$smoke_dir/logs"
-          export MEDIA_HOST_PATH="$smoke_dir/media"
-          export QUEUE_HOST_PATH="$smoke_dir/queue"
-          export LOGS_HOST_PATH="$smoke_dir/logs"
-          export PUID="$(id -u)" PGID="$(id -g)"
-
-          docker compose config --quiet
           docker compose up -d --no-build
-          trap 'docker compose down' EXIT
-          docker exec subsync sh -c 'test -w /queue && test -w /logs'
+          trap 'docker compose logs; docker compose down -v' EXIT
 
-          health_cmd=$(docker image inspect bazarr-subsync-bridge --format '{{index .Config.Healthcheck.Test 1}}')
-          ready=0
-          for attempt in $(seq 1 30); do
-            if docker exec subsync sh -c "$health_cmd"; then
-              ready=1
-              break
-            fi
+          for _ in $(seq 60); do
+            [ "$(docker inspect -f '{{.State.Health.Status}}' subsync)" = healthy ] && break
             sleep 1
           done
-          test "$ready" -eq 1
-          docker exec subsync supervisorctl -c /etc/supervisor/conf.d/subsync.conf stop subsync-monitor
-          if docker exec subsync sh -c "$health_cmd"; then
-            echo 'Health check reported success with the monitor stopped' >&2
-            exit 1
-          fi
-          docker exec subsync supervisorctl -c /etc/supervisor/conf.d/subsync.conf start subsync-monitor
-          docker exec subsync sh -c "$health_cmd"
+          test "$(docker inspect -f '{{.State.Health.Status}}' subsync)" = healthy
+
+          before=$(sha256sum media/episode.srt)
+          ! python3 tests/make_subtitles.py --check media/reference.srt media/episode.srt
+          printf '{"video": "/media/reference.srt", "subtitle": "/media/episode.srt", "subtitle_lang": "eng", "video_lang": "eng"}' > queue/job-1-1.json.tmp
+          mv queue/job-1-1.json.tmp queue/job-1-1.json
+          for _ in $(seq 120); do
+            [ -e queue/job-1-1.json ] || break
+            sleep 1
+          done
+          test ! -e queue/job-1-1.json
+          grep -q 'Synchronized: /media/episode.srt' logs/bridge.log
+          test "$(sha256sum media/episode.srt)" != "$before"
+          python3 tests/make_subtitles.py --check media/reference.srt media/episode.srt
+          test -z "$(find media -name '.*')"
+
+          docker compose exec subsync sh -c 'touch /cache/write-test'
+          docker compose stop -t 30
+          grep -q 'Stopped by signal' logs/bridge.log

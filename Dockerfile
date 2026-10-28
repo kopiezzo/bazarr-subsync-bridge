@@ -1,87 +1,51 @@
-# Dockerfile - SubSync Container
-# Combined: subsync (subtitle sync) + monitor (queue watcher)
-# Base: Python 3.11 on supported Debian Bookworm with FFmpeg and PocketSphinx
+# syntax=docker/dockerfile:1
 
-FROM python:3.11-slim-bookworm
+# Build stage: SubSync 0.17 with its native extension (gizmo), compiled against FFmpeg 5 and PocketSphinx.
+# SubSync's setup.py links all FFmpeg libraries; --as-needed keeps only the four gizmo uses.
+FROM python:3.11-slim-bookworm AS build
 
-# Metadata
-LABEL maintainer="bazarr-subsync-bridge maintainers"
-LABEL description="SubSync container for Bazarr integration with queue monitoring"
-LABEL version="1.0"
-
-# Environment variables
-ENV PYTHONUNBUFFERED=1 \
-    DEBIAN_FRONTEND=noninteractive \
-    SUBSYNC_VERSION=0.17
-
-# Install system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    # Build dependencies
-    build-essential \
-    pkg-config \
-    cmake \
-    git \
-    # FFmpeg and libraries
-    ffmpeg \
-    libavcodec-dev \
-    libavdevice-dev \
-    libavfilter-dev \
-    libavformat-dev \
-    libavutil-dev \
-    libswresample-dev \
-    libswscale-dev \
-    # Speech recognition
-    libsphinxbase-dev \
-    pocketsphinx \
-    libpocketsphinx-dev \
-    # Monitoring tools
-    inotify-tools \
-    jq \
-    wget \
-    # Process manager
-    supervisor \
-    # Other tools
-    ca-certificates \
+        build-essential cmake git pkg-config \
+        libavcodec-dev libavdevice-dev libavfilter-dev libavformat-dev libavutil-dev libswresample-dev libswscale-dev \
+        libpocketsphinx-dev libsphinxbase-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Install pybind11 for subsync compilation
-RUN pip install --no-cache-dir pybind11
+ARG SUBSYNC_VERSION=0.17
+COPY patches/ /patches/
+RUN git clone --depth 1 --branch "${SUBSYNC_VERSION}" https://github.com/sc0ty/subsync.git /src \
+    && git -C /src apply /patches/subsync-0.17-ffmpeg5.patch \
+    && python -m venv /opt/venv \
+    && LDFLAGS="-Wl,--as-needed" /opt/venv/bin/pip install --no-cache-dir -r /src/requirements.txt /src \
+    && find /opt/venv -name '*.so' -exec strip --strip-unneeded {} + \
+    && find /opt/venv -name '__pycache__' -prune -exec rm -rf {} + \
+    && /opt/venv/bin/pip uninstall -y pip pybind11
 
-# Download and install subsync
-WORKDIR /tmp/subsync
-COPY patches/subsync-0.17-ffmpeg5.patch /tmp/subsync-0.17-ffmpeg5.patch
-RUN git clone --depth 1 --branch ${SUBSYNC_VERSION} https://github.com/sc0ty/subsync.git . && \
-    git apply /tmp/subsync-0.17-ffmpeg5.patch && \
-    pip install --no-cache-dir -r requirements.txt && \
-    pip install --no-cache-dir . && \
-    cd / && rm -rf /tmp/subsync
+# Runtime stage: only the shared libraries the extension links against, the virtualenv, and the bridge.
+FROM python:3.11-slim-bookworm
 
-# Create working directories
-RUN mkdir -p /scripts /queue /logs /media
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        libavcodec59 libavformat59 libavutil57 libswresample4 libpocketsphinx3 libsphinxbase3 \
+    && rm -rf /var/lib/apt/lists/*
 
-# Copy scripts
-COPY subsync-wrapper.sh /scripts/subsync-wrapper.sh
-COPY subsync-monitor.sh /scripts/subsync-monitor.sh
-RUN chmod +x /scripts/*.sh
+COPY --from=build /opt/venv /opt/venv
+COPY bridge.py /app/bridge.py
 
-# Create supervisord config
-RUN mkdir -p /etc/supervisor/conf.d
+# HOME holds SubSync's settings and downloaded speech models; mount a volume there to keep them.
+# It is world-writable so the container can run as any PUID:PGID.
+ENV PATH=/opt/venv/bin:$PATH \
+    HOME=/cache \
+    PYTHONUNBUFFERED=1
+RUN mkdir -p /queue /logs /cache && chmod 1777 /cache \
+    && python -c "import gizmo" && subsync --version
 
-COPY supervisord.conf /etc/supervisor/conf.d/subsync.conf
+USER 1000:1000
 
-# Create runtime user/group (default 1000:1000)
-ARG PUID=1000
-ARG PGID=1000
-RUN groupadd -g ${PGID} subsync && \
-    useradd -u ${PUID} -g ${PGID} -m -s /bin/bash subsync && \
-    chown -R subsync:subsync /scripts /queue /logs /media
+HEALTHCHECK --interval=30s --timeout=10s --start-period=20s --start-interval=2s --retries=3 \
+    CMD ["python3", "/app/bridge.py", "--health"]
 
-USER subsync
+CMD ["python3", "/app/bridge.py"]
 
-# Healthcheck - ask Supervisor for the monitor state instead of matching the
-# healthcheck shell's own command line.
-HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
-    CMD supervisorctl -c /etc/supervisor/conf.d/subsync.conf status subsync-monitor | grep -Eq '^subsync-monitor[[:space:]]+RUNNING([[:space:]]|$)'
-
-# Start supervisord to manage monitor process
-CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/subsync.conf"]
+LABEL org.opencontainers.image.title="Bazarr SubSync Bridge" \
+      org.opencontainers.image.description="Queue-based Bazarr post-processing bridge for SubSync subtitle alignment with optional Plex refresh" \
+      org.opencontainers.image.source="https://github.com/kopiezzo/bazarr-subsync-bridge" \
+      org.opencontainers.image.licenses="GPL-3.0-only"

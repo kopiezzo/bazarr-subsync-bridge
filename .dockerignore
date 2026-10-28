@@ -1,6 +1,4 @@
-.git
-.github
-logs
-queue
-*.log
-.env
+# Build context: only what the Dockerfile copies
+*
+!bridge.py
+!patches/

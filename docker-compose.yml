@@ -1,13 +1,11 @@
 services:
   subsync:
-    build:
-      context: .
-      args:
-        PUID: ${PUID:-1000}
-        PGID: ${PGID:-1000}
-    image: bazarr-subsync-bridge:latest
+    image: ghcr.io/kopiezzo/bazarr-subsync-bridge:${BRIDGE_VERSION:-latest}
+    build: .
     container_name: subsync
     restart: unless-stopped
+    init: true
+    user: "${PUID:-1000}:${PGID:-1000}"
     env_file:
       - path: .env
         required: false
@@ -27,3 +25,9 @@ services:
         target: ${MEDIA_CONTAINER_PATH:-/media}
         bind:
           create_host_path: false
+      - type: volume
+        source: cache
+        target: /cache
+
+volumes:
+  cache:
