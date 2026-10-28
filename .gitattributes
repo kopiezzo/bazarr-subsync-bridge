@@ -1,0 +1,20 @@
+# Shared repository standard: text always uses LF, exceptions below
+* text=auto eol=lf
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.webp binary
+*.gif binary
+*.ico binary
+*.pdf binary
+*.ttf binary
+*.otf binary
+*.woff binary
+*.woff2 binary
+*.apk binary
+*.zip binary
+*.gz binary
+*.age binary
+*.sqlite3 binary
