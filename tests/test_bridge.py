@@ -9,6 +9,7 @@ import tempfile
 import threading
 import unittest
 from pathlib import Path
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
@@ -75,7 +76,8 @@ class BridgeTest(unittest.TestCase):
         self.assertEqual((str(job.video), str(job.subtitle), job.subtitle_lang, job.video_lang), ("/m/v.mkv", "/m/v.srt", "pol", ""))
 
     def test_invalid_jobs(self):
-        for name, text in (("a.json", "{"), ("b.json", "[]"), ("c.json", '{"video": "x"}'), ("d.json", '{"video": 1, "subtitle": "s"}')):
+        for name, text in (("a.json", "{"), ("b.json", "[]"), ("c.json", '{"video": "/x"}'), ("d.json", '{"video": 1, "subtitle": "/s"}'),
+                           ("e.json", '{"video": "media/v.mkv", "subtitle": "/m/v.srt"}')):
             path = self.queue / name
             path.write_text(text)
             with self.assertRaises(self.bridge.InvalidJob):
@@ -145,6 +147,37 @@ class BridgeTest(unittest.TestCase):
         self.assertFalse(job.exists())
         self.assertEqual(refreshed, [self.video])
 
+    def test_shutdown_after_success_removes_job(self):
+        job = self.queue_job(video=str(self.video), subtitle=str(self.subtitle()))
+        real_sync = self.bridge.sync
+
+        def sync_then_stop(*args):
+            ok = real_sync(*args)
+            self.bridge.stopping = True
+            return ok
+
+        with mock.patch.object(self.bridge, "sync", sync_then_stop):
+            self.bridge.process(job, self.bridge.Settings(), self.bridge.Plex("", ""))
+        self.assertFalse(job.exists())
+
+    def test_broken_job_does_not_stop_the_queue(self):
+        first = self.queue_job("job-1-1.json", video=str(self.video), subtitle=str(self.subtitle()))
+        second = self.queue_job("job-2-1.json", video=str(self.video), subtitle=str(self.subtitle("b.srt")))
+        calls = []
+
+        def process(path, settings, plex):
+            calls.append(path.name)
+            if path == first:
+                raise RuntimeError("bug")
+            path.unlink()
+            self.bridge.stopping = True
+
+        with mock.patch.object(self.bridge, "process", process), mock.patch.object(self.bridge.time, "sleep"), \
+                mock.patch.object(self.bridge, "setup_logging"), mock.patch.object(sys, "argv", ["bridge.py"]):
+            self.assertEqual(self.bridge.main(), 0)
+        self.assertEqual(calls, ["job-1-1.json", "job-2-1.json"])
+        self.assertFalse(first.exists() or second.exists())
+
     def test_shutdown_keeps_job(self):
         os.environ["FAKE_SUBSYNC_SLEEP"] = "30"
         job = self.queue_job(video=str(self.video), subtitle=str(self.subtitle()))
@@ -206,6 +239,12 @@ class PlexTest(unittest.TestCase):
     def test_refresh_sends_token_and_encoded_folder(self):
         self.plex.refresh(Path("/media/tv/My Show/e 1.mkv"))
         self.assertIn(("/library/sections/1/refresh?path=%2Fmedia%2Ftv%2FMy%20Show", "secret"), self.requests)
+
+    def test_refresh_survives_unexpected_answer(self):
+        import bridge
+        plex = bridge.Plex("http://unused", "secret")
+        plex.request = lambda path: b"[]"
+        plex.refresh(Path("/media/x.mkv"))
 
     def test_refresh_survives_unreachable_plex(self):
         import bridge

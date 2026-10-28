@@ -5,6 +5,13 @@ services:
     container_name: subsync
     restart: unless-stopped
     init: true
+    # The bridge stops SubSync and waits up to 10 s for it before exiting
+    stop_grace_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
     user: "${PUID:-1000}:${PGID:-1000}"
     env_file:
       - path: .env

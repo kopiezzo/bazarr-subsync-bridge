@@ -98,6 +98,8 @@ def read_job(path: Path) -> Job:
         fields[key] = value.strip()
     if not fields["video"] or not fields["subtitle"]:
         raise InvalidJob("job needs video and subtitle")
+    if not (fields["video"].startswith("/") and fields["subtitle"].startswith("/")):
+        raise InvalidJob("video and subtitle must be absolute paths")
     return Job(Path(fields["video"]), Path(fields["subtitle"]), fields["subtitle_lang"], fields["video_lang"])
 
 
@@ -118,8 +120,9 @@ def subsync_command(job: Job, output: Path, settings: Settings) -> list[str]:
     return command
 
 
-def run(command: list[str], timeout: float) -> int:
-    """Run SubSync, log its output, keep the heartbeat fresh, and stop it on timeout or shutdown."""
+def run(command: list[str], timeout: float) -> int | None:
+    """Run SubSync, log its output, and keep the heartbeat fresh. Returns the exit code, or None when SubSync
+    was stopped on timeout or shutdown."""
     log.info("Running: %s", " ".join(command))
     process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, errors="replace")
     reader = threading.Thread(target=forward, args=(process.stdout,), daemon=True)
@@ -134,7 +137,7 @@ def run(command: list[str], timeout: float) -> int:
                 pass
             if stopping or time.monotonic() > deadline:
                 log.error("SubSync %s, stopping it", "interrupted by shutdown" if stopping else f"timed out after {timeout:g}s")
-                return -1
+                return None
     finally:
         if process.poll() is None:
             process.terminate()
@@ -169,7 +172,7 @@ def sync(job: Job, settings: Settings) -> bool:
         output.unlink(missing_ok=True)
         code = run(subsync_command(job, output, settings), settings.timeout)
         if code != 0:
-            log.error("SubSync failed (code %s); subtitle left unchanged", code)
+            log.error("SubSync %s; subtitle left unchanged", "did not finish" if code is None else f"failed (code {code})")
             return False
         if not output.is_file() or output.stat().st_size == 0:
             log.error("SubSync did not write an output file; subtitle left unchanged")
@@ -231,7 +234,7 @@ class Plex:
                 return
             self.request(f"/library/sections/{key}/refresh?path={urllib.parse.quote(str(video.parent), safe='')}")
             log.info("Plex: refreshed section %s: %s", key, video.parent)
-        except (OSError, ValueError) as e:
+        except Exception as e:   # the refresh is a courtesy: whatever Plex answers, the job stays done
             log.warning("Plex refresh failed (check PLEX_URL and PLEX_TOKEN): %s", e)
 
 
@@ -252,7 +255,7 @@ def process(path: Path, settings: Settings, plex: Plex) -> None:
     log.info("Video: %s", job.video)
     log.info("Subtitle: %s (%s -> %s)", job.subtitle, job.subtitle_lang or "auto", job.video_lang or "auto")
     ok = sync(job, settings)
-    if stopping:
+    if stopping and not ok:
         log.info("Shutdown: job %s stays queued", path.name)
         return
     path.unlink(missing_ok=True)
@@ -307,7 +310,12 @@ def main() -> int:
         for path in pending_jobs():
             if stopping:
                 break
-            process(path, settings, plex)
+            try:
+                process(path, settings, plex)
+            except Exception:
+                # A bug must not turn into a restart loop on the same job: log it and drop the job.
+                log.exception("Unexpected error in job %s; job removed", path.name)
+                path.unlink(missing_ok=True)
         time.sleep(POLL_SECONDS)
     log.info("Stopped by signal")
     return 0
