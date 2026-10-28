@@ -41,8 +41,8 @@ class BridgeTest(unittest.TestCase):
         fake.chmod(0o755)
         self.args = root / "args.txt"
         self.env = {
-            "QUEUE_DIR": str(self.queue), "LOG_DIR": str(self.logs), "HEARTBEAT_FILE": str(root / "beat"),
-            "SUBSYNC_COMMAND": str(fake), "FAKE_SUBSYNC_ARGS": str(self.args),
+            "BRIDGE_QUEUE_DIR": str(self.queue), "BRIDGE_LOG_DIR": str(self.logs), "BRIDGE_HEARTBEAT": str(root / "beat"),
+            "BRIDGE_SUBSYNC": str(fake), "FAKE_SUBSYNC_ARGS": str(self.args),
         }
         self.saved = {k: os.environ.get(k) for k in [*self.env, "FAKE_SUBSYNC_FAIL", "FAKE_SUBSYNC_SLEEP"]}
         os.environ.update(self.env)
@@ -151,6 +151,16 @@ class BridgeTest(unittest.TestCase):
         threading.Timer(1.5, lambda: setattr(self.bridge, "stopping", True)).start()
         self.bridge.process(job, self.bridge.Settings(), self.bridge.Plex("", ""))
         self.assertTrue(job.exists())
+
+    def test_old_queue_variables_are_ignored(self):
+        os.environ["QUEUE_DIR"], os.environ["LOG_DIR"] = "./queue", "./logs"
+        try:
+            import bridge
+            bridge = importlib.reload(bridge)
+            self.assertEqual(bridge.QUEUE_DIR, self.queue)
+            self.assertEqual(bridge.LOG_DIR, self.logs)
+        finally:
+            del os.environ["QUEUE_DIR"], os.environ["LOG_DIR"]
 
     def test_health(self):
         self.assertFalse(self.bridge.healthy())

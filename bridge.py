@@ -24,10 +24,12 @@ import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
 
-QUEUE_DIR = Path(os.environ.get("QUEUE_DIR", "/queue"))
-LOG_DIR = Path(os.environ.get("LOG_DIR", "/logs"))
-HEARTBEAT = Path(os.environ.get("HEARTBEAT_FILE", "/tmp/bridge-heartbeat"))
-SUBSYNC = os.environ.get("SUBSYNC_COMMAND", "subsync")
+# Fixed container paths. The BRIDGE_* overrides exist for the tests; 1.x configurations may still carry
+# QUEUE_DIR and LOG_DIR with host paths, so those names are deliberately not read.
+QUEUE_DIR = Path(os.environ.get("BRIDGE_QUEUE_DIR", "/queue"))
+LOG_DIR = Path(os.environ.get("BRIDGE_LOG_DIR", "/logs"))
+HEARTBEAT = Path(os.environ.get("BRIDGE_HEARTBEAT", "/tmp/bridge-heartbeat"))
+SUBSYNC = os.environ.get("BRIDGE_SUBSYNC", "subsync")
 POLL_SECONDS = 2
 HEALTHY_SECONDS = 60
 
