@@ -1,7 +1,11 @@
-# Local runtime artifacts
+# Local runtime data
 logs/
 queue/
+media/
 *.log
+
+# Python
+__pycache__/
 
 # Local environment files
 .env
