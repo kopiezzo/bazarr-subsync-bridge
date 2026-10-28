@@ -57,12 +57,6 @@ jobs:
       - name: Image size
         run: docker image inspect -f '{{.Size}}' ghcr.io/kopiezzo/bazarr-subsync-bridge:latest | numfmt --to=iec
 
-      - name: Size of the previous image (one-off comparison)
-        run: |
-          git fetch -q origin main && mkdir old && git --work-tree=old checkout origin/main -- .
-          docker build -q -t old-image old >/dev/null
-          docker image inspect -f '{{.Size}}' old-image | numfmt --to=iec
-
       - name: Sync a subtitle through the queue
         run: |
           set -euo pipefail
