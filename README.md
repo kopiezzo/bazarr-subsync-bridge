@@ -51,6 +51,7 @@ Settings are read from `.env`, created from [`.env.example`](.env.example).
 
 - **Host paths:** create the media, queue, and log directories before starting Compose. Compose fails when a bind source is missing instead of creating it with the wrong owner. Check `id -u` and `id -g` and set `PUID` and `PGID` to the owner of these directories.
 - **Speech models:** SubSync downloads the speech recognition models it needs on first use. They are kept in the `cache` volume, so they are not downloaded again when the container is recreated.
+- **Logs:** `bridge.log` rotates at 10 MB with three old files, and the Compose file caps Docker's own log the same way.
 - **Secrets:** keep `.env`, Plex tokens, logs, and queue payloads out of Git.
 - **Trust boundary:** the queue is a trusted input. Only Bazarr or trusted automation should write to it.
 
@@ -66,7 +67,7 @@ Make `bazarr-postprocess.sh` available in Bazarr's scripts directory, preferably
 
 ### Queue jobs
 
-The hook writes `job-*.json` atomically. Jobs need `video` and `subtitle`; the language fields are optional and use the three-letter codes Bazarr provides.
+The hook writes `job-*.json` atomically. Jobs need `video` and `subtitle` as absolute paths; the language fields are optional and use the three-letter codes Bazarr provides.
 
 ```json
 {
@@ -84,7 +85,7 @@ Bazarr hook -> shared queue -> bridge.py -> SubSync -> subtitle replaced -> opti
 - **Order:** the bridge checks the queue every 2 seconds and processes jobs one at a time, oldest first.
 - **Languages:** `subtitle_lang` and `video_lang` are passed to SubSync, which uses the audio language to choose its speech model. An unknown code falls back to SubSync's own detection.
 - **Sync:** SubSync writes its output beside the subtitle, with the same extension, so SRT, ASS, and SSA keep their format. The bridge replaces the subtitle atomically and keeps its file mode. A failed or timed-out sync leaves the original untouched.
-- **Queue files:** the bridge removes the job file after every attempt, including a failed one, so failures are found in the log. A job interrupted by container shutdown stays queued and runs again after the restart.
+- **Queue files:** the bridge removes the job file after every attempt, including a failed or invalid one, so failures are found in the log. A sync interrupted by container shutdown stays queued and runs again after the restart; the container gets 30 seconds to stop.
 - **Plex:** after a successful sync the bridge refreshes the folder in the Plex library section whose location contains the video. Plex must see media under the same path as the container. A failed refresh is logged and does not fail the job.
 
 ## Verification
