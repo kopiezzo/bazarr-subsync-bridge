@@ -21,7 +21,21 @@ def srt(offset: int, cues: int = 60) -> str:
     )
 
 
+def first_start(path: str) -> float:
+    """Start of the first cue in seconds."""
+    for line in open(path, encoding="utf-8"):
+        if "-->" in line:
+            h, m, rest = line.split("-->")[0].strip().split(":")
+            return int(h) * 3600 + int(m) * 60 + float(rest.replace(",", "."))
+    raise ValueError(f"no cue in {path}")
+
+
 if __name__ == "__main__":
+    if sys.argv[1] == "--check":
+        reference, synced = sys.argv[2:4]
+        drift = abs(first_start(synced) - first_start(reference))
+        print(f"drift after sync: {drift:.3f} s")
+        sys.exit(0 if drift < 0.2 else 1)
     reference, shifted = sys.argv[1:3]
     with open(reference, "w", encoding="utf-8") as f:
         f.write(srt(0))
