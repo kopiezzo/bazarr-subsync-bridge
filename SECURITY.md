@@ -8,7 +8,7 @@ Security fixes target the latest default branch state.
 
 Do not open a public issue for security problems.
 
-Report privately to the repository owner and include:
+Report it privately with GitHub's private vulnerability reporting: open the repository's Security tab and choose Report a vulnerability, or go to https://github.com/kopiezzo/bazarr-subsync-bridge/security/advisories/new. Include:
 
 - impact
 - reproduction steps
