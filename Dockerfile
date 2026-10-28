@@ -1,6 +1,7 @@
 # syntax=docker/dockerfile:1
 
 # Build stage: SubSync 0.17 with its native extension (gizmo), compiled against FFmpeg 5 and PocketSphinx.
+# SubSync's setup.py links all FFmpeg libraries; --as-needed keeps only the four gizmo uses.
 FROM python:3.11-slim-bookworm AS build
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -14,14 +15,16 @@ COPY patches/ /patches/
 RUN git clone --depth 1 --branch "${SUBSYNC_VERSION}" https://github.com/sc0ty/subsync.git /src \
     && git -C /src apply /patches/subsync-0.17-ffmpeg5.patch \
     && python -m venv /opt/venv \
-    && /opt/venv/bin/pip install --no-cache-dir -r /src/requirements.txt /src
+    && LDFLAGS="-Wl,--as-needed" /opt/venv/bin/pip install --no-cache-dir -r /src/requirements.txt /src \
+    && find /opt/venv -name '*.so' -exec strip --strip-unneeded {} + \
+    && find /opt/venv -name '__pycache__' -prune -exec rm -rf {} + \
+    && /opt/venv/bin/pip uninstall -y pip pybind11
 
 # Runtime stage: only the shared libraries the extension links against, the virtualenv, and the bridge.
 FROM python:3.11-slim-bookworm
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-        libavcodec59 libavdevice59 libavfilter8 libavformat59 libavutil57 libswresample4 libswscale6 \
-        libpocketsphinx3 libsphinxbase3 \
+        libavcodec59 libavformat59 libavutil57 libswresample4 libpocketsphinx3 libsphinxbase3 \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=build /opt/venv /opt/venv
